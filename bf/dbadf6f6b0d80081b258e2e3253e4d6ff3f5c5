@@ -1,0 +1,29 @@
+frontend/mock-api.js
+  s_a9b441c4745001::t_0c479cc6bd309c 83-88
+frontend/index.html
+  s_a9b441c4745001::t_0c479cc6bd309c 14
+frontend/app.js
+  s_a9b441c4745001::t_0c479cc6bd309c 7,39-47,55,66-73,76,79-101,103-107,109-111
+README.md
+  s_a9b441c4745001::t_57b4421bd82593 37
+frontend/style.css
+  s_a9b441c4745001::t_0c479cc6bd309c 555-560
+scripts/workspaces.test.mjs
+  s_a9b441c4745001::t_339174e8d21438 135-147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "bfdbadf6f6b0d80081b258e2e3253e4d6ff3f5c5",
+  "prompts": {},
+  "sessions": {
+    "s_a9b441c4745001": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0bd85-94e9-7f73-83aa-8213c5c1679f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
