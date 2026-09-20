@@ -623,13 +623,90 @@ window.workspaceData = {
     if(!w)throw Error('工作空间不存在');
     return w;
   },
+  create(input) {
+    const name=String(input.name||'').trim(),description=String(input.description||'').trim();
+    const businesses=String(input.businesses||'').split(/[,，、\n]/).map(s=>s.trim()).filter(Boolean);
+    if(!name||name.length>40||description.length>300||businesses.length>12||businesses.some(b=>b.length>40))throw Error('请检查空间名称、业务说明和业务线长度');
+    if(window.workspaceCatalog.some(w=>w.name.toLowerCase()===name.toLowerCase()))throw Error('工作空间名称已存在');
+    const existing=window.workspaceCatalog.filter(w=>w.custom);
+    if(existing.length>=30)throw Error('最多创建 30 个自定义工作空间');
+    const id='ws-'+(globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));
+    const w={id,name,description:description||'待配置日志数据源与业务知识',businesses:businesses.length?businesses:['通用业务'],custom:true,repository:'',commit:'',services:[],cases:[],flow:[]};
+    try{localStorage.setItem('paytrace.custom-workspaces.v1',JSON.stringify([...existing,w]))}catch{throw Error('工作空间未保存，请检查浏览器存储后重试')}
+    window.workspaceCatalog.push(w);return w;
+  },
+  update(id,input) {
+    const current=this.get(id),name=String(input.name||'').trim(),description=String(input.description||'').trim();
+    const businesses=String(input.businesses||'').split(/[,，、\n]/).map(s=>s.trim()).filter(Boolean);
+    if(!name||name.length>40||description.length>300||businesses.length>12||businesses.some(b=>b.length>40))throw Error('请检查空间名称、业务说明和业务线长度');
+    if(window.workspaceCatalog.some(w=>w.id!==id&&w.name.toLowerCase()===name.toLowerCase()))throw Error('工作空间名称已存在');
+    const meta=JSON.parse(localStorage.getItem('paytrace.workspace-meta.v1')||'{}');
+    meta[id]={name,description,businesses};
+    try{localStorage.setItem('paytrace.workspace-meta.v1',JSON.stringify(meta))}catch{throw Error('工作空间未保存，请检查浏览器存储后重试')}
+    Object.assign(current,meta[id]);return current;
+  },
+  remove(id) {
+    this.get(id);if(window.workspaceCatalog.length<=1)throw Error('至少保留一个工作空间，请先新建空间');
+    const meta=JSON.parse(localStorage.getItem('paytrace.workspace-meta.v1')||'{}');meta[id]={deleted:true};
+    const prefix='paytrace.frontend.v1.'+(id==='card'?'':id+'.');
+    const changes=new Map(['reports','services','knowledge'].map(k=>[prefix+k,null]));
+    changes.set('paytrace.custom-workspaces.v1',JSON.stringify(window.workspaceCatalog.filter(w=>w.custom&&w.id!==id)));
+    changes.set('paytrace.workspace-meta.v1',JSON.stringify(meta));
+    const previous=new Map([...changes.keys()].map(k=>[k,localStorage.getItem(k)]));
+    try{for(const [k,v] of changes)v===null?localStorage.removeItem(k):localStorage.setItem(k,v)}
+    catch{for(const [k,v] of previous){try{v===null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch{}}throw Error('浏览器空间清理未完成，请刷新核对后重试')}
+    window.workspaceCatalog=window.workspaceCatalog.filter(w=>w.id!==id);
+  },
   services(id) {
     const w=this.get(id);
     return w.services.map(s=>({...s,project:w.name,environment:'沙箱',logFile:`logs/${s.name}.log`,version:w.commit?w.commit.slice(0,8):'v1.0',enabled:true}));
   },
   knowledge(id) {
     const w=this.get(id);
-    if(!w.repository)return {scanEnabled:false,projects:[],markdown:'',updatedAt:null};
+    if(w.custom)return {scanEnabled:false,projects:[],updatedAt:null,markdown:`# ${w.name}业务说明\n\n## 业务范围\n${w.description}\n业务线：${w.businesses.join('、')}。\n\n## 服务与日志\n请在日志数据源中添加服务器，补充服务职责、交易流水字段、消息关联字段和日志路径。\n\n## 交易状态\n请填写实际状态含义、状态流转与渠道错误码解释。\n\n## 排查原则\n仅根据本笔交易的关联证据判断；日志缺失不等于业务未执行，超时不等于失败。业务文档是参考，不是本次交易事实。\n\n## 运营处理\n先核实交易和渠道最终状态，再核对下游处理记录；补发、退款和状态变更须按既有流程人工确认。\n\n可在服务配置中测试 SSH 并按流水号查询服务器日志；真实交易查询和自动跨服务排障尚未接入。配置保存不代表连接成功。`};
+    if(!w.repository)return {scanEnabled:false,projects:[],updatedAt:null,markdown:`# 外卡支付业务与排查手册
+
+## 适用范围
+用于外卡支付受理、渠道结果核实与商户异步通知排查。本文是业务参考，交易与日志来自沙箱案例，不代表生产状态。
+
+## 服务职责与业务链路
+- trx：受理交易，保存渠道响应，生成通知消息。
+- daemon：消费通知消息，调用商户通知接口，记录超时与重试结果。
+- 渠道：提供支付结果；平台留存的渠道响应不等于本次直接查询渠道。
+- 商户：维护商户订单，需通过查单或接收日志独立核实。
+链路：交易受理 → 渠道响应 → 通知入队 → daemon 通知处理 → 商户订单核实。
+
+## 日志关联字段
+- transaction：支付交易流水号，精确匹配本笔交易。
+- channelId：渠道流水号，用于后续渠道查单。
+- messageId：在 trx 的 NOTIFY_ENQUEUED 记录中获取，再关联 daemon。
+- event：业务事件；attempt、attempts：通知重试次数。
+相邻日志仅作上下文，不得把其他交易的拒绝码或状态用于当前交易归因。
+
+## 状态与常见异常
+- SUCCESS：平台记录支付成功，商户订单状态仍需独立确认。
+- FAILED：支付失败，渠道通用拒绝码不能确定发卡行具体原因。
+- PROCESSING：仍在处理中；CHANNEL_TIMEOUT 不等于支付失败或未扣款。
+- CHANNEL_DECLINED / channelCode=05：本案例为通用拒绝，不可解释成余额不足。
+- NOTIFY_TIMEOUT：平台未及时收到确认，不证明商户没有收到或处理通知。
+- RETRY_EXHAUSTED：通知重试耗尽，本案例三次未确认后转人工核实；不自动补发。
+
+## 推荐排查顺序
+1. 核对交易号、商户、金额、渠道流水号和平台状态。
+2. 在 trx 证据中确认渠道响应；如有 messageId，继续关联 daemon。
+3. 比较渠道、平台与商户三个视角，标明缺失证据。
+4. 通知异常先查询商户订单，核对映射与幂等，再评估下一步。
+5. 渠道超时先查最终状态；通用拒绝先核实渠道说明。
+6. 如需补发、退款或修改状态，交由授权人员按既有流程处理。
+
+## AI 分析输出要求
+按“已确认事实、可能原因、待核实事项、运营下一步”组织摘要，引用本报告的 [E1] 等证据编号。文档不是交易事实；不凭缺失日志断言业务未执行，不声称访问了服务器或扫描了本地项目。
+
+## 内置案例
+- T202609200001：支付成功，通知超时且重试耗尽；可补充商户查单证据。
+- T202609200002：渠道明确拒绝，具体原因仍需核实。
+- T202609200003：渠道请求超时，最终状态未知。
+`};
     return {scanEnabled:false,projects:[{name:w.repository,path:`/Users/liuyuhao/IdeaProjects/${w.repository}`,branch:'master'}],updatedAt:null,
       markdown:`# ${w.name}业务说明\n\n来源：${w.repository} / master / ${w.commit}。静态代码审阅，不代表生产部署版本。\n\ncb_common 是共享业务模块，不是独立服务器。以下是业务步骤，不能将每一步理解为跨服务 RPC。\n\n`+w.cases.map(c=>`## ${c.business}\n${c.pipeline.map(p=>`${p.label}（${p.service} / ${p.detail}）`).join(' → ')}\n\n${c.sources.map(s=>`- ${s.file}:${s.line} / ${s.symbol}：${s.note}`).join('\n')}\n\n排查重点：${c.actions.join('；')}\n`).join('\n')};
   },
@@ -649,3 +726,20 @@ window.workspaceData = {
       mode:'规则诊断 · 沙箱数据',durationMs:0,feedback:{},ai:{status:'disabled',text:'可结合当前业务文档、代码来源摘要和日志证据进行 AI 分析。'}};
   }
 };
+
+// Load custom spaces without altering built-in IDs or existing storage namespaces.
+try{
+  const saved=JSON.parse(localStorage.getItem('paytrace.custom-workspaces.v1')||'[]');
+  if(Array.isArray(saved))for(const w of saved){
+    if(!w||!/^ws-[a-z0-9-]+$/.test(w.id)||typeof w.name!=='string'||!w.name.trim()||window.workspaceCatalog.some(x=>x.id===w.id))continue;
+    window.workspaceCatalog.push({id:w.id,name:w.name.slice(0,40),description:String(w.description||'').slice(0,300),businesses:Array.isArray(w.businesses)?w.businesses.filter(b=>typeof b==='string').slice(0,12).map(b=>b.slice(0,40)):[],custom:true,repository:'',commit:'',services:[],cases:[],flow:[]});
+  }
+}catch{}
+
+// Built-in spaces can also be renamed or removed; keep bundled case definitions intact.
+try{
+  const meta=JSON.parse(localStorage.getItem('paytrace.workspace-meta.v1')||'{}');
+  const visible=window.workspaceCatalog.filter(w=>!meta[w.id]?.deleted);
+  if(visible.length)window.workspaceCatalog=visible;
+  for(const w of window.workspaceCatalog){const m=meta[w.id];if(m&&typeof m.name==='string'&&m.name.trim())Object.assign(w,{name:m.name.slice(0,40),description:String(m.description||'').slice(0,300),businesses:Array.isArray(m.businesses)?m.businesses.filter(b=>typeof b==='string').slice(0,12):w.businesses})}
+}catch{}

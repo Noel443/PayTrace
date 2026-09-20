@@ -1,0 +1,98 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,writeFile,readFile,symlink,stat,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {projectCandidate,changeProjects,publicProjects,readProjects,writeProjects,projectSnapshot,validateAnalysis,analyzeProject} from './projects.mjs';
+import {config} from './ai.mjs';
+const exec=promisify(execFile);
+const base={workspace:'card',name:'支付核心',repoPath:'/missing/repo',branch:'master',focus:'支付与通知',scanEnabled:false};
+const answer={summary:'支付受理与通知',businesses:['支付'],chains:[{name:'支付链路',steps:[{label:'受理交易',service:'trx',description:'校验请求后入库',evidenceIds:['P1']}]}],uncertainties:['未提供渠道实现']};
+async function temp(t){const dir=await mkdtemp(path.join(tmpdir(),'paytrace-project-test-'));t.after(()=>rm(dir,{recursive:true,force:true}));return dir}
+test('project settings isolate workspaces and editing preserves an explicitly stale analysis',async t=>{
+  let store=changeProjects({version:1,projects:[]},base);const id=store.projects[0].id;
+  store.projects[0].analysis={...answer,revision:1};
+  assert.throws(()=>changeProjects(store,{...base,workspace:'hk-cb',id}),/未找到/);
+  assert.throws(()=>changeProjects(store,base),/同名/);
+  const changed=changeProjects(store,{...base,id,branch:'release'});
+  assert.equal(store.projects[0].branch,'master');assert.equal(changed.projects[0].revision,2);
+  assert.equal(changed.projects[0].analysisStale,true);assert.deepEqual(changed.projects[0].analysis,store.projects[0].analysis);
+  assert.equal(publicProjects(changed,'hk-cb').length,0);
+  const file=path.join(await temp(t),'projects.json');await writeProjects(file,changed);
+  assert.deepEqual(await readProjects(file),changed);assert.equal((await stat(file)).mode&0o777,0o600);
+  await assert.rejects(writeProjects(file+'/bad',changed));assert.deepEqual(await readProjects(file),changed);
+});
+test('project input rejects unsafe branches and relative repositories; defaults to master',()=>{
+  assert.equal(projectCandidate({...base,branch:''}).branch,'master');
+  for(const branch of ['--all','master~1','master^{tree}','../main','name\nnext'])assert.throws(()=>projectCandidate({...base,branch}));
+  assert.throws(()=>projectCandidate({...base,scanEnabled:true,repoPath:'relative'}),/绝对路径/);
+});
+test('Markdown-only mode never touches repository and redacts common credential assignments',async()=>{
+  const snapshot=await projectSnapshot(base,'# 支付\napi_key = "private-value"');
+  assert.equal(snapshot.mode,'markdown');assert.equal(snapshot.commit,null);assert.equal(snapshot.documents.length,1);
+  assert(!snapshot.documents[0].text.includes('private-value'));
+  await assert.rejects(projectSnapshot(base,''),/保存 Markdown/);
+});
+test('scan reads committed master even when HEAD and worktree differ, skipping secrets and symlinks',async t=>{
+  const repo=await temp(t),git=async(...args)=>(await exec('git',['-C',repo,...args])).stdout.trim();
+  await git('init','-b','master');await mkdir(path.join(repo,'src'));
+  await writeFile(path.join(repo,'README.md'),'# MASTER BUSINESS');
+  await writeFile(path.join(repo,'src','PaymentService.java'),'class PaymentService { String password = "hidden-key"; }');
+  await writeFile(path.join(repo,'credentials.md'),'DO NOT SEND');
+  await writeFile(path.join(repo,'application-prod.md'),'DO NOT SEND');
+  await symlink('/etc/passwd',path.join(repo,'linked.md'));
+  await mkdir(path.join(repo,'tests'));await writeFile(path.join(repo,'tests','Example.java'),'DO NOT SEND');
+  await git('add','.');await git('-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','-m','master fixture');
+  const master=await git('rev-parse','HEAD');await git('checkout','-b','feature');
+  await writeFile(path.join(repo,'README.md'),'# FEATURE BUSINESS');await git('add','.');
+  await git('-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','-m','feature fixture');
+  await writeFile(path.join(repo,'README.md'),'DIRTY WORKTREE');
+  const before=await git('status','--porcelain'),head=await git('rev-parse','HEAD');
+  const snapshot=await projectSnapshot({...base,repoPath:repo,scanEnabled:true});
+  assert.equal(snapshot.commit,master);assert.equal(snapshot.coverage.total,2);
+  assert(snapshot.documents.some(d=>d.text.includes('MASTER BUSINESS')));
+  assert(!JSON.stringify(snapshot).includes('hidden-key'));assert(!JSON.stringify(snapshot).includes('DO NOT SEND'));
+  assert.equal(await git('rev-parse','HEAD'),head);assert.equal(await git('status','--porcelain'),before);
+  assert.equal(await readFile(path.join(repo,'README.md'),'utf8'),'DIRTY WORKTREE');
+  await assert.rejects(projectSnapshot({...base,repoPath:repo,scanEnabled:true,branch:'missing'}),/本地分支存在/);
+});
+test('repository coverage and excerpt bounds are explicit',async t=>{
+  const repo=await temp(t),git=async(...args)=>exec('git',['-C',repo,...args]);
+  await git('init','-b','master');
+  for(let i=0;i<30;i++)await writeFile(path.join(repo,'Service'+i+'.java'),'// business\n'.repeat(1000));
+  await git('add','.');await git('-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','-m','bounded fixture');
+  const snapshot=await projectSnapshot({...base,repoPath:repo,scanEnabled:true});
+  assert.equal(snapshot.coverage.total,30);assert(snapshot.coverage.read<=24);assert.equal(snapshot.coverage.truncated,true);
+  assert(snapshot.documents.every(d=>d.text.length<=7000));assert(snapshot.documents.reduce((n,d)=>n+d.text.length,0)<=90000);
+});
+test('model output requires structure and real source IDs, and rejects empty or fabricated chains',async()=>{
+  const snapshot=await projectSnapshot(base,'# 业务文档');
+  assert.deepEqual(validateAnalysis('```json\n'+JSON.stringify(answer)+'\n```',snapshot),answer);
+  for(const value of [{...answer,chains:[]},{...answer,businesses:[]},{...answer,chains:[{name:'凭空推断',steps:[{...answer.chains[0].steps[0],evidenceIds:['P999']}]}]}])assert.throws(()=>validateAnalysis(JSON.stringify(value),snapshot));
+  assert.throws(()=>validateAnalysis('not json',snapshot),/有效的业务链路 JSON/);
+});
+test('project analysis uses configured streaming model and retains provenance without persisting source text',async()=>{
+  const events=[],c=config({AI_PROVIDER:'ollama',AI_MODEL:'fixture-project'});
+  const result=await analyzeProject({...base,revision:2},c,'# 业务专属文档内容',(kind,value)=>events.push({kind,value}),{fetcher:async(url,options)=>{
+    assert.equal(url,'http://127.0.0.1:11434/api/chat');
+    const body=JSON.parse(options.body);assert.equal(body.stream,true);assert.equal(body.options.num_predict,4000);
+    assert(body.messages[1].content.includes('业务专属文档内容'));assert(body.messages[0].content.includes('静态处理链路'));
+    return new Response(JSON.stringify({message:{content:JSON.stringify(answer)},done:true})+'\n',{headers:{'Content-Type':'application/x-ndjson'}});
+  }});
+  assert.equal(result.revision,2);assert.equal(result.model,'fixture-project');assert.equal(result.sources[0].file,'workspace-knowledge.md');
+  assert.equal(result.sources[0].text,undefined);assert(!JSON.stringify(result).includes('业务专属文档内容'));assert(events.some(e=>e.kind==='delta'));
+  await assert.rejects(analyzeProject(base,{enabled:false},'text',()=>{}),/启用 AI/);
+});
+
+test('project delete removes its saved analysis, persists and rejects cross-workspace IDs',async t=>{
+  let store=changeProjects({version:1,projects:[]},base);const id=store.projects[0].id;
+  store.projects[0].analysis=answer;store=changeProjects(store,{...base,workspace:'hk-cb'});
+  assert.throws(()=>changeProjects(store,{action:'delete',workspace:'hk-cb',id}),/未找到/);
+  const next=changeProjects(store,{action:'delete',workspace:'card',id});
+  assert.equal(next.projects.length,1);assert.equal(store.projects.length,2);
+  const file=path.join(await temp(t),'projects.json');await writeProjects(file,next);
+  assert.equal(publicProjects(await readProjects(file),'card').length,0);
+  assert.equal(publicProjects(await readProjects(file),'hk-cb').length,1);
+});

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>登录 · PayTrace</title><link rel="icon" href="data:,"><link rel="stylesheet" href="./style.css"><script src="./auth.js"></script></head>
+<body class="login-page">
+<main class="login-layout">
+<section class="login-intro" aria-label="PayTrace 支付运营工作台">
+<a class="brand" href="./login.html">P<span>PayTrace<small>支付运营工作台</small></span></a>
+<div class="login-story"><span class="login-kicker">PAYMENT OPERATIONS</span><h1>让每一次排查，<br>都有证据可循。</h1><p>连接交易、日志与业务知识，<br>从发现异常到形成可追溯的处理结论。</p><div class="login-flow"><span>交易定位</span><i>→</i><span>证据关联</span><i>→</i><span>辅助决策</span></div></div>
+<p class="login-intro-footer">外卡支付 · 跨境支付 · MSO</p>
+</section>
+<section class="login-panel"><div class="login-card"><div class="login-card-heading"><span class="login-kicker">WORKSPACE ACCESS</span><h2>登录工作台</h2><p>使用运营账号进入交易排查工作空间。</p></div>
+<form id="login-form">
+<label for="login-username">账号</label><input id="login-username" name="username" autocomplete="username" placeholder="请输入账号" required maxlength="60" autofocus>
+<div class="login-password-label"><label for="login-password">密码</label><button id="toggle-password" type="button" aria-controls="login-password" aria-pressed="false">显示密码</button></div><input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="请输入密码" required maxlength="100">
+<label for="login-slider" class="login-slider-label">滑动验证 <small>模拟验证</small></label>
+<div class="login-slider" id="slider-track"><span id="slider-text" aria-hidden="true">向右滑动完成验证</span><input id="login-slider" type="range" min="0" max="100" value="0" step="1" aria-label="向右滑动完成模拟验证" aria-valuetext="尚未验证"></div>
+<p id="slider-status" class="sr-only" role="status">尚未完成滑动验证</p>
+<p id="login-error" role="alert"></p><button class="primary login-submit" type="submit">登录工作台 <span>↗</span></button>
+</form><div class="login-account-hint">体验账号 <b>admin</b><span>/</span>密码 <b>admin</b></div><p class="login-footnote">当前为本地体验环境，登录状态在当前标签页内保留。</p>
+</div><p class="login-copyright">PayTrace · 支付交易智能排障</p></section>
+</main><script src="./login.js"></script></body></html>

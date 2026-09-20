@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 function setup(){
   const data=new Map();let fail=false;
   const c=vm.createContext({window:{},structuredClone,localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>{if(fail)throw Error('quota');data.set(k,v)}}});
-  for(const file of ['investigation','mock-api'])vm.runInContext(readFileSync(new URL(`../frontend/${file}.js`,import.meta.url),'utf8'),c);
+  for(const file of ['workspaces','investigation','mock-api'])vm.runInContext(readFileSync(new URL(`../frontend/${file}.js`,import.meta.url),'utf8'),c);
   return {api:c.window.demoApi,inspect:c.window.investigation.inspect,fail:()=>fail=true};
 }
 const create=api=>api('/investigations','POST',{transactionId:'T202609200001'});

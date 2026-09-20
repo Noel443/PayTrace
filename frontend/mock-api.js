@@ -57,7 +57,7 @@
     const reports=read('reports',[]);reports.unshift(report);save('reports',reports.slice(0,200));return report;
   }
   window.demoApi=async(path,method='GET',body,workspace='card')=>{
-    if(workspace!=='card')window.workspaceData.get(workspace);
+    window.workspaceData.get(workspace);
     const serviceDefaults=workspace==='card'?defaults:window.workspaceData.services(workspace);
     if(path==='/knowledge'){
       if(method==='PUT'){
@@ -70,7 +70,9 @@
         const knowledge={scanEnabled:body.scanEnabled,projects,markdown,updatedAt:new Date().toISOString()};
         try{localStorage.setItem(storageKey('knowledge',workspace),JSON.stringify(knowledge))}catch{throw Error('浏览器本地存储不可用或空间不足，未保存。请下载 Markdown 备份后重试。')}
       }
-      return read('knowledge',workspace==='card'?{scanEnabled:false,projects:[],markdown:'',updatedAt:null}:window.workspaceData.knowledge(workspace),workspace);
+      const defaults=window.workspaceData.knowledge(workspace),knowledge=read('knowledge',defaults,workspace);
+      if(method!=='PUT'&&!knowledge.updatedAt&&!String(knowledge.markdown||'').trim())return {...knowledge,markdown:defaults.markdown,updatedAt:null,usingDefault:true};
+      return {...knowledge,usingDefault:!knowledge.updatedAt&&knowledge.markdown===defaults.markdown};
     }
     if(path==='/transactions')return structuredClone(workspace==='card'?transactions:window.workspaceData.get(workspace).cases);
     if(path==='/status')return {enabled:false,model:'未接入',provider:'前端原型'};
@@ -97,7 +99,7 @@
       return report;
     }
     const match=path.match(/^\/investigations\/([^/]+)(\/feedback)?$/);
-    if(match){const reports=read('reports',[],workspace),report=reports.find(r=>r.id===match[1]);if(!report)throw Error('排查记录不存在');if(match[2]&&method==='POST'){if(!['已解决','需要开发介入','判断不正确'].includes(body.status))throw Error('请选择处理结果');report.feedback={status:body.status,note:String(body.note||'').slice(0,2000),time:new Date().toISOString()};save('reports',reports,workspace)}return report}
+    if(match){const reports=read('reports',[],workspace),report=reports.find(r=>r.id===match[1]);if(!report)throw Error('排查记录不存在');if(!match[2]&&method==='DELETE'){save('reports',reports.filter(r=>r.id!==report.id),workspace);return {deleted:true}}if(match[2]&&method==='POST'){if(!['已解决','需要开发介入','判断不正确'].includes(body.status))throw Error('请选择处理结果');report.feedback={status:body.status,note:String(body.note||'').slice(0,2000),time:new Date().toISOString()};save('reports',reports,workspace)}return report}
     throw Error('未找到对应数据');
   };
 })();

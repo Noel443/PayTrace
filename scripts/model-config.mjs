@@ -23,7 +23,7 @@ export async function readConfig(file,fallback){
 export async function writeConfig(file,c){
   await writeJson(file,{...c,clearKey:!c.key});
 }
-async function writeJson(file,value){
+export async function writeJson(file,value){
   await mkdir(path.dirname(file),{recursive:true,mode:0o700});
   const temp=file+'.'+randomUUID()+'.tmp';
   try{await writeFile(temp,JSON.stringify(value,null,2),{mode:0o600,flag:'wx'});await rename(temp,file);}
@@ -41,12 +41,12 @@ export function changeStore(store,input){
   }
   if(input.action==='delete'){
     if(!existing)throw Error('请选择服务商');
-    if(existing.id===store.activeId)throw Error('请先启用其他服务商，再删除当前服务商');
-    return {...store,providers:store.providers.filter(p=>p.id!==existing.id)};
+    return {...store,activeId:existing.id===store.activeId?null:store.activeId,providers:store.providers.filter(p=>p.id!==existing.id)};
   }
   if(input.action!=='save')throw Error('不支持的配置操作');
   const name=String(input.name||'').trim();
   if(!name||name.length>60)throw Error('请填写 1–60 个字符的服务商名称');
+  if(store.providers.some(p=>p.id!==existing?.id&&p.name.toLowerCase()===name.toLowerCase()))throw Error('服务商名称已存在');
   if(!existing&&store.providers.length>=30)throw Error('最多保存 30 个服务商');
   const entry={...candidate(input,existing),id:existing?.id||randomUUID(),name};
   if(input.activate&&!entry.enabled)throw Error('请先完善模型和密钥，再启用');

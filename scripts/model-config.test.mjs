@@ -54,7 +54,7 @@ test('legacy config migrates without overwriting; multiple keys and active selec
     store=changeStore(store,{action:'activate',id:second});await writeStore(file,store);
     store=await readStore(file,{});assert.equal(activeConfig(store).key,'second-key');
     assert.equal((await stat(file)).mode&0o777,0o600);
-    assert.throws(()=>changeStore(store,{action:'delete',id:second}),/先启用其他/);
+    const deletedActive=changeStore(store,{action:'delete',id:second});assert.equal(deletedActive.activeId,null);assert.equal(deletedActive.providers.length,1);
     assert.throws(()=>changeStore(store,{...original,action:'save',name:'Second',id:second,base:'https://another.test',key:''}),/重新填写/);
     store=changeStore(store,{action:'delete',id:first});assert.equal(store.providers.length,1);
     const cleared=changeStore(store,{...original,id:second,name:'Second',action:'save',key:'',clearKey:true});
@@ -80,4 +80,12 @@ test('empty store and rejected changes preserve configuration',async()=>{
     assert.equal(JSON.stringify(store),snapshot);
     assert.equal((await readStore(file,{})).activeId,store.activeId);
   }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test('deleting the last active provider disables AI instead of retaining its credentials',async()=>{
+  const {changeStore,activeConfig}=await import('./model-config.mjs');
+  const store=changeStore({version:2,providers:[],activeId:null},{action:'save',name:'Local',provider:'ollama',base:'http://127.0.0.1:11434',model:'demo',activate:true});
+  assert.throws(()=>changeStore(store,{action:'save',name:'local',provider:'ollama',base:'http://127.0.0.1:11434',model:'demo'}),/已存在/);
+  const empty=changeStore(store,{action:'delete',id:store.activeId});
+  assert.equal(empty.providers.length,0);assert.equal(empty.activeId,null);assert.equal(activeConfig(empty).enabled,false);
 });

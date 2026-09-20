@@ -66,16 +66,22 @@ export async function analyze(c,input,fetcher=fetch) {
 }
 
 export async function analyzeStream(c,input,emit,{fetcher=fetch,signal}={}){
-  const messages=messagesFor(c,input),ollama=c.provider==='ollama';
-  const timeout=AbortSignal.timeout(60000),requestSignal=signal?AbortSignal.any([signal,timeout]):timeout;
+  const messages=messagesFor(c,input);
   emit('stage',{phase:'prepared',message:`已整理 ${input.report.evidence.length} 条关联证据与业务文档`});
+  return modelTextStream(c,messages,emit,{fetcher,signal});
+}
+
+export async function modelTextStream(c,messages,emit,{fetcher=fetch,signal,maxTokens=1800}={}){
+  if(!c.enabled)throw Error('请先在模型服务商中启用有效的 AI 连接');
+  const ollama=c.provider==='ollama';
+  const timeout=AbortSignal.timeout(60000),requestSignal=signal?AbortSignal.any([signal,timeout]):timeout;
   emit('stage',{phase:'connecting',message:'正在连接 '+c.model,model:c.model});
   let response;
   try{
     response=await fetcher(c.base+(ollama?'/api/chat':'/chat/completions'),{
       method:'POST',redirect:'error',signal:requestSignal,
       headers:{'Content-Type':'application/json',...(!ollama?{Authorization:'Bearer '+c.key}:{})},
-      body:JSON.stringify({model:c.model,messages,stream:true,...(ollama?{options:{num_predict:1800}}:{max_tokens:1800})})
+      body:JSON.stringify({model:c.model,messages,stream:true,...(ollama?{options:{num_predict:maxTokens}}:{max_tokens:maxTokens})})
     });
   }catch{throw Error(signal?.aborted?'分析已停止':'模型连接失败或超过 60 秒，请检查模型服务');}
   if(!response.ok){

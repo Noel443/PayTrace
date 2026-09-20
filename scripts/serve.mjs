@@ -5,7 +5,16 @@ import path from 'node:path';
 import {loadEnv,config,status,analyze,analyzeStream} from './ai.mjs';
 import {publicConfig,candidate,readStore,writeStore,activeConfig,publicStore,changeStore,isLocalConfigRequest} from './model-config.mjs';
 
+import {readProjects,writeProjects,changeProjects,publicProjects,analyzeProject} from './projects.mjs';
+import {runSsh} from './ssh-logs.mjs';
+import {workspaceKey,publicSources,changeSources,readSources,writeSources} from './log-sources.mjs';
+
 await loadEnv();
+const sourcesFile=process.env.LOG_SOURCES_FILE||fileURLToPath(new URL('../data/log-sources.json',import.meta.url));
+let sourceStore=await readSources(sourcesFile),sourcesBusy=false;
+const projectsFile=process.env.PROJECTS_FILE||fileURLToPath(new URL('../data/projects.json',import.meta.url));
+let projectStore=await readProjects(projectsFile),projectBusy=false;
+const knownHostsFile=path.join(path.dirname(sourcesFile),'ssh','known_hosts');
 const configFile=process.env.AI_CONFIG_FILE||fileURLToPath(new URL('../data/ai-config.json',import.meta.url));
 let modelStore=await readStore(configFile,config());
 let aiConfig=activeConfig(modelStore);
@@ -20,6 +29,89 @@ const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8'
 const server=http.createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Referrer-Policy','no-referrer');
+  if(req.url==='/api/workspaces/delete'){
+    if(!isLocalConfigRequest(req,port)||req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请通过本机页面删除工作空间'});return;}
+    if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
+    if(projectBusy||sourcesBusy){json(res,409,{message:'项目或数据源操作尚未结束，请完成后重试删除'});return;}
+    projectBusy=sourcesBusy=true;
+    try{
+      const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>4096){json(res,413,{message:'请求过大'});return;}chunks.push(chunk)}
+      let workspace;try{workspace=workspaceKey(JSON.parse(Buffer.concat(chunks).toString()).workspace)}catch{json(res,400,{message:'工作空间标识无效'});return;}
+      // Commit each store before updating memory. Retrying finishes a partially completed cleanup.
+      const sources={...sourceStore,sources:sourceStore.sources.filter(s=>s.workspace!==workspace)};
+      await writeSources(sourcesFile,sources);sourceStore=sources;
+      const projects={...projectStore,projects:projectStore.projects.filter(p=>p.workspace!==workspace)};
+      await writeProjects(projectsFile,projects);projectStore=projects;
+      json(res,200,{deleted:true});
+    }catch{json(res,500,{message:'空间清理未完成，部分配置可能已删除。空间入口保留，请重试以完成清理'})}
+    finally{projectBusy=sourcesBusy=false;}return;
+  }
+  if(req.url?.split('?')[0]==='/api/projects'){
+    if(!isLocalConfigRequest(req,port)){json(res,403,{message:'项目配置与分析仅限本机页面访问'});return;}
+    if(req.method==='GET'){
+      try{const workspace=workspaceKey(new URL(req.url,'http://localhost').searchParams.get('workspace'));json(res,200,{projects:publicProjects(projectStore,workspace)})}catch(e){json(res,400,{message:e.message})}return;
+    }
+    if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
+    if(req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请从本机页面操作项目'});return;}
+    if(projectBusy){json(res,429,{message:'正在保存或分析项目，请等待当前操作完成'});return;}
+    projectBusy=true;const controller=new AbortController();const disconnect=()=>{if(!res.writableEnded)controller.abort()};res.on('close',disconnect);
+    const emit=(event,data)=>{if(!res.destroyed&&!res.writableEnded)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
+    let counted=false;
+    try{
+      const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>450000){json(res,413,{message:'项目请求过大，请缩短业务文档'});return;}chunks.push(chunk)}
+      let input;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'));workspaceKey(input?.workspace)}catch{json(res,400,{message:'项目请求格式无效'});return;}
+      if(['save','delete'].includes(input.action)){
+        let next;try{next=changeProjects(projectStore,input)}catch(e){json(res,400,{message:e.message});return;}
+        await writeProjects(projectsFile,next);projectStore=next;json(res,200,{projects:publicProjects(projectStore,input.workspace)});return;
+      }
+      if(input.action!=='analyze'){json(res,400,{message:'不支持的项目操作'});return;}
+      const project=projectStore.projects.find(p=>p.id===input.id&&p.workspace===input.workspace);
+      if(!project){json(res,404,{message:'当前空间未找到该项目'});return;}
+      if(!aiConfig.enabled){json(res,400,{message:'请先配置并启用 AI 模型服务商'});return;}
+      const now=Date.now();while(attempts.length&&attempts[0]<now-60000)attempts.shift();
+      if(active>=2||attempts.length>=10){json(res,429,{message:'分析请求过于频繁，请稍后重试'});return;}
+      const requestConfig=aiConfig;active++;attempts.push(now);counted=true;
+      res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'});res.flushHeaders();
+      const analysis=await analyzeProject(project,requestConfig,input.markdown,emit,{signal:controller.signal});controller.signal.throwIfAborted();
+      emit('stage',{phase:'saving',message:'业务链路分析完成，正在保存到工作空间'});
+      const next={...projectStore,projects:projectStore.projects.map(p=>p.id===project.id?{...p,analysis,analysisStale:false}:p)};
+      await writeProjects(projectsFile,next);projectStore=next;
+      emit('done',{projects:publicProjects(projectStore,input.workspace),projectId:project.id});res.end();
+    }catch(e){
+      const message=e.code?'项目操作或本机保存失败，原有分析结果保留':e.message||'项目分析失败，原有结果保留';
+      if(!res.destroyed){if(res.headersSent){emit('error',{message});res.end()}else json(res,500,{message})}
+    }finally{res.off('close',disconnect);projectBusy=false;if(counted)active--;}return;
+  }
+  if(req.url?.split('?')[0]==='/api/log-sources'){
+    if(!isLocalConfigRequest(req,port)){json(res,403,{message:'服务器配置仅限本机页面访问'});return;}
+    if(req.method==='GET'){
+      try{const scope=workspaceKey(new URL(req.url,'http://localhost').searchParams.get('workspace'));json(res,200,{sources:publicSources(sourceStore,scope)});}catch(e){json(res,400,{message:e.message})}return;
+    }
+    if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
+    if(req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请通过本机页面保存服务器配置'});return;}
+    if(sourcesBusy){json(res,429,{message:'正在执行数据源操作，请稍后重试'});return;}
+    sourcesBusy=true;
+    try{
+      const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>16384){json(res,413,{message:'配置过大'});return;}chunks.push(chunk)}
+      let input,next;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'));workspaceKey(input?.workspace)}catch(e){json(res,400,{message:e instanceof SyntaxError?'配置 JSON 无效':e.message});return;}
+      if(['test','search'].includes(input.action)){
+        const source=sourceStore.sources.find(s=>s.id===input.id&&s.workspace===input.workspace);
+        if(!source){json(res,404,{message:'当前工作空间未找到该数据源'});return;}
+        const controller=new AbortController(),disconnect=()=>{if(!res.writableEnded)controller.abort()};res.on('close',disconnect);
+        let result,error;
+        try{result=await runSsh(source,{action:input.action,query:input.query,knownHostsFile,signal:controller.signal})}catch(e){error=e}
+        finally{res.off('close',disconnect)}
+        if(controller.signal.aborted)return;
+        const lastCheck={ok:!error,checkedAt:result?.checkedAt||new Date().toISOString(),message:error?.message||'SSH 登录与日志读取检查通过'};
+        const checkedStore={...sourceStore,sources:sourceStore.sources.map(s=>s.id===source.id?{...s,lastCheck}:s)};
+        let saveWarning='';try{await writeSources(sourcesFile,checkedStore);sourceStore=checkedStore}catch{saveWarning='检查状态未保存到本机文件，请检查目录权限'}
+        if(error){json(res,502,{message:error.message,saveWarning,sources:publicSources(sourceStore,input.workspace)});return;}
+        json(res,200,{sources:publicSources(sourceStore,input.workspace),result,saveWarning});return;
+      }
+      try{next=changeSources(sourceStore,input)}catch(e){json(res,400,{message:e.message});return;}
+      try{await writeSources(sourcesFile,next);sourceStore=next;json(res,200,{sources:publicSources(sourceStore,input.workspace)});}catch{json(res,500,{message:'服务器配置未保存，请检查本机 data 目录权限；原配置保留'})}
+    }catch{if(!res.headersSent)json(res,400,{message:'保存请求未完成'})}finally{sourcesBusy=false}return;
+  }
   if(req.url==='/api/ai/status'&&req.method==='GET'){json(res,200,status(aiConfig));return;}
   if(['/api/ai/config','/api/ai/test','/api/ai/providers'].includes(req.url)){
     if(!isLocalConfigRequest(req,port)){json(res,403,{message:'模型配置仅限本机 localhost 或 127.0.0.1 页面访问'});return;}

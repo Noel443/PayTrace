@@ -1,19 +1,24 @@
 const $ = s => document.querySelector(s);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let transactions=[], current=null, feedbackStatus='', busy=false, historyRows=[],aiJob=null;
-let workspaceId='card';
+window.addEventListener('paytrace:logout',()=>{aiJob?.controller.abort();window.cancelProjectAnalysis?.();});
+let workspaceId=window.workspaceCatalog[0].id;
 try{const saved=localStorage.getItem('paytrace.workspace');if(window.workspaceCatalog.some(w=>w.id===saved))workspaceId=saved}catch{}
+let workspaceViewVersion=0;
 let activeWorkspace=window.workspaceData.get(workspaceId),selectedCase=null;
 $('#workspace-select').innerHTML=window.workspaceCatalog.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('');
 $('#workspace-select').value=workspaceId;
-$('#workspace-select').addEventListener('change',async e=>{
-  if(busy){e.target.value=workspaceId;return}
-  aiJob?.controller.abort();
-  workspaceId=e.target.value;activeWorkspace=window.workspaceData.get(workspaceId);
+async function switchWorkspace(id,targetView){
+  if(busy||window.workspaceMutation){$('#workspace-select').value=workspaceId;return;}
+  const switchVersion=++workspaceViewVersion;
+  const previousView=document.querySelector('.view:not([hidden])')?.id||'workbench';
+  aiJob?.controller.abort();window.cancelProjectAnalysis?.();workspaceId=id;activeWorkspace=window.workspaceData.get(id);$('#workspace-select').value=id;
   try{localStorage.setItem('paytrace.workspace',workspaceId)}catch{}
   current=null;selectedCase=null;feedbackStatus='';historyRows=[];resetHistoryFilters();$('#result').hidden=true;$('#result').replaceChildren();$('#empty').hidden=false;$('#error').hidden=true;
-  view('workbench');await init();toast('已切换至'+activeWorkspace.name);
-});
+  window.refreshWorkspaceActions?.();const initialization=init();view(targetView||previousView);await initialization;if(switchVersion!==workspaceViewVersion)return;toast('已切换至'+activeWorkspace.name);
+}
+$('#workspace-select').addEventListener('change',e=>switchWorkspace(e.target.value));
+
 async function api(path,method='GET',body,scope=workspaceId){
   if(path==='/status'){
     if(location.protocol==='file:')return {enabled:false,model:'未配置',message:'真实 AI 需要通过 npm start 启动并访问本地地址'};
@@ -22,11 +27,13 @@ async function api(path,method='GET',body,scope=workspaceId){
   return window.demoApi(path,method,body,scope)
 }
 function toast(text){$('#toast').textContent=text;$('#toast').hidden=false;setTimeout(()=>$('#toast').hidden=true,3000)}
-function view(name){if(name!=='workbench')aiJob?.controller.abort();document.querySelectorAll('.view').forEach(e=>e.hidden=e.id!==name);document.querySelectorAll('.nav').forEach(e=>e.classList.toggle('active',e.dataset.view===name));$('#breadcrumb').textContent={workbench:'交易排查',history:'排查记录',settings:'服务配置'}[name];if(name==='history')loadHistory();if(name==='settings'){loadSettings();loadKnowledge();loadModelConfig();}if(name==='workbench')requestAnimationFrame(drawFlow)}
+function view(name){if(name!=='workbench')aiJob?.controller.abort();document.querySelectorAll('.view').forEach(e=>e.hidden=e.id!==name);document.querySelectorAll('.nav').forEach(e=>e.classList.toggle('active',e.dataset.view===name));$('#breadcrumb').textContent={workbench:'交易排查',history:'排查记录',settings:'服务配置'}[name];if(name==='history')loadHistory();if(name==='settings'){loadSettings();loadKnowledge();loadModelConfig();window.loadLogSources?.();window.loadProjectSettings?.();}if(name==='workbench'){requestAnimationFrame(drawFlow);window.loadProjectOverview?.();}}
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>view(b.dataset.view)));
 function choose(id){if(busy)return;const t=transactions.find(t=>t.id===id);$('#transaction-id').value=t.id;$('#question').value=t.question;$('#error').hidden=true;selectedCase=t;$('#flow-title').textContent=(t.business||'交易')+'处理链路';drawFlow();$('#transaction-id').focus()}
-async function init(){try{renderWorkspaceOverview();transactions=await api('/transactions');$('#case-count').textContent=transactions.length+' 个业务场景 · '+activeWorkspace.services.length+' 个关联服务';$('#samples').innerHTML=transactions.map(t=>`<button type="button" class="sample" data-tx="${esc(t.id)}">${esc(t.scenario)}</button>`).join('');$('#scenario-list').innerHTML=transactions.map((t,i)=>`<button type="button" class="scenario" data-tx="${esc(t.id)}"><span class="case-no">CASE / 0${i+1}</span><span class="arrow">↗</span><h3>${t.business?`<span class="case-business">${esc(t.business)}</span>`:''}${esc(t.scenario)}</h3><p>${esc(t.question)}</p><small>${esc(t.id)}</small></button>`).join('');document.querySelectorAll('[data-tx]').forEach(b=>b.addEventListener('click',()=>choose(b.dataset.tx)));choose(transactions[0].id);const status=await api('/status');$('#model-label').textContent=status.enabled?'AI 已配置 · '+status.model:'规则诊断 · AI 待配置';drawFlow()}catch(e){$('#error').textContent=e.message;$('#error').hidden=false}}
-$('#investigate-form').addEventListener('submit',async e=>{e.preventDefault();if(busy)return;aiJob?.controller.abort();busy=true;$('#run').disabled=true;$('#run').textContent='排查中…';$('#loading').hidden=false;$('#error').hidden=true;$('#result').hidden=true;$('#empty').hidden=true;try{current=await api('/investigations','POST',{transactionId:$('#transaction-id').value,question:$('#question').value});renderReport()}catch(e){$('#error').textContent=e.message;$('#error').hidden=false;$('#empty').hidden=false}finally{busy=false;$('#run').disabled=false;$('#run').innerHTML='开始排查 <span>↗</span>';$('#loading').hidden=true}});
+async function init(){const scope=workspaceId,version=workspaceViewVersion;try{renderWorkspaceOverview();const rows=await api('/transactions','GET',undefined,scope);if(scope!==workspaceId||version!==workspaceViewVersion)return;transactions=rows;$('#case-count').textContent=transactions.length+' 个业务场景 · '+activeWorkspace.services.length+' 个关联服务';$('#samples').innerHTML=transactions.map(t=>`<button type="button" class="sample" data-tx="${esc(t.id)}">${esc(t.scenario)}</button>`).join('');$('#scenario-list').innerHTML=transactions.map((t,i)=>`<button type="button" class="scenario" data-tx="${esc(t.id)}"><span class="case-no">CASE / 0${i+1}</span><span class="arrow">↗</span><h3>${t.business?`<span class="case-business">${esc(t.business)}</span>`:''}${esc(t.scenario)}</h3><p>${esc(t.question)}</p><small>${esc(t.id)}</small></button>`).join('');document.querySelectorAll('[data-tx]').forEach(b=>b.addEventListener('click',()=>choose(b.dataset.tx)));$('#run').disabled=!transactions.length;$('#flow-canvas').closest('.flow-band').hidden=!transactions.length;
+if(transactions.length)choose(transactions[0].id);else{$('#transaction-id').value='';$('#question').value='';$('#scenario-list').innerHTML='<div class="workspace-empty"><h3>工作空间已就绪，等待接入业务数据</h3><p>先添加服务器日志数据源，并完善业务文档。可在服务配置中测试 SSH 和查询日志；真实交易查询及自动生成报告尚未接入。</p><button type="button" class="primary" id="setup-workspace">配置数据源与业务文档</button></div>';$('#setup-workspace').onclick=()=>view('settings');}
+const status=await api('/status');if(scope!==workspaceId||version!==workspaceViewVersion)return;$('#model-label').textContent=status.enabled?'AI 已配置 · '+status.model:'规则诊断 · AI 待配置';drawFlow()}catch(e){$('#error').textContent=e.message;$('#error').hidden=false}}
+$('#investigate-form').addEventListener('submit',async e=>{e.preventDefault();if(activeWorkspace.custom){toast('当前空间可在服务配置中查询服务器日志；交易查询与自动生成报告尚未接入');return;}if(busy)return;aiJob?.controller.abort();busy=true;$('#run').disabled=true;$('#run').textContent='排查中…';$('#loading').hidden=false;$('#error').hidden=true;$('#result').hidden=true;$('#empty').hidden=true;try{current=await api('/investigations','POST',{transactionId:$('#transaction-id').value,question:$('#question').value});renderReport()}catch(e){$('#error').textContent=e.message;$('#error').hidden=false;$('#empty').hidden=false}finally{busy=false;$('#run').disabled=false;$('#run').innerHTML='开始排查 <span>↗</span>';$('#loading').hidden=true}});
 function renderReport(){aiJob?.controller.abort();const r=reportForDisplay(current),t=r.transaction;feedbackStatus=r.feedback?.status||'';$('#empty').hidden=true;$('#result').hidden=false;$('#result').innerHTML=`<div class="result-heading"><div><h2>排查报告 <span class="tag ${r.diagnosis==='待核实'?'amber':''}">${esc(r.diagnosis)}</span></h2><p>${esc(new Date(r.createdAt).toLocaleString('zh-CN'))} · ${esc(r.mode)} · ${(r.durationMs/1000).toFixed(2)}s</p></div><button class="text-button" id="export">↓ 导出排查单</button></div>${PayTraceGraph.render(r)}${investigationPanel(r)}<div class="report-grid"><div><div class="facts">${[['交易流水号',t.id],['交易金额',t.currency+' '+t.amount],['业务状态',t.statusLabel||{SUCCESS:'支付成功',FAILED:'支付失败',PROCESSING:'处理中'}[t.status]||t.status],['商户',t.merchant],['渠道',t.channel],['渠道流水号',t.channelId],['交易时间',t.time],['业务环境',(r.workspaceName||'外卡支付')+' · 沙箱']].map(([k,v])=>`<div><small>${esc(k)}</small><b>${esc(v)}</b></div>`).join('')}</div><div class="conclusion ${r.diagnosis==='待核实'?'pending':''}"><span class="tag">诊断结论</span><h2>${esc(r.title)}</h2><p>${esc(r.summary)}</p></div><div class="section-title"><h2>日志证据</h2><span>${r.evidence.length} 条精确关联记录</span></div>${r.evidence.length?r.evidence.map(e=>`<details class="evidence" id="evidence-${esc(e.id)}"><summary><span class="tag">${esc(e.id)}</span><b>${esc(e.service)}</b><span>${esc(e.text.match(/event=(\S+)/)?.[1]||'日志记录')}</span><span class="location">${esc(e.file)}:${e.line}</span></summary><code class="log">${esc(e.text)}</code><p class="context-label">匹配标识：${esc(e.matchedBy)} · 下方相邻行仅为上下文，可能包含其他交易</p><pre>${esc(e.context)}</pre></details>`).join(''):'<p>没有找到可用日志证据。</p>'}${r.code.text?`<details class="evidence"><summary><span class="tag">CODE</span><b>通知重试策略</b><span class="location">${esc(r.code.version)}</span></summary><p>${esc(r.code.file)}</p><pre>${esc(r.code.text)}</pre></details>`:''}<div class="section-title"><h2>运营下一步</h2><span>人工确认后执行</span></div><ol class="actions">${r.actions.map(a=>`<li>${esc(a)}</li>`).join('')}</ol><div class="uncertainty"><b>仍需确认</b><br>${r.uncertainties.map(esc).join('<br>')}</div><div class="section-title"><h2 id="ai-section-title" tabindex="-1">AI 证据分析</h2><span id="ai-result-state">${esc({disabled:'待分析',completed:r.ai.model,failed:'调用失败'}[r.ai.status])}</span></div><p>点击后将本次交易信息、问题、匹配日志和已保存的 Markdown 发送给已配置的模型。不会读取本地代码仓库。</p><button class="primary" id="analyze-ai" type="button">${r.ai.status==='completed'?'重新分析':'AI 分析'}</button><button class="text-button" id="stop-ai" type="button" hidden>停止分析</button><p id="ai-progress" role="status"></p><div id="ai-live" class="ai-live" hidden><ol id="ai-stages" class="ai-stages"></ol><div id="ai-output-sections" class="ai-output-sections"></div><div id="ai-stream-text" class="ai-text"></div></div><div id="ai-saved-text" class="ai-text">${aiTextWithReferences(r)}</div>${r.ai.status==='completed'?`<p class="ai-metadata">${esc(r.ai.model||'已配置模型')}${r.ai.analyzedAt?' · '+esc(new Date(r.ai.analyzedAt).toLocaleString('zh-CN')):''}${Number.isFinite(r.ai.durationMs)?' · 耗时 '+(r.ai.durationMs/1000).toFixed(1)+' 秒':''} · 引用编号可点击查看</p>`:''}${r.ai.notice?`<p>${esc(r.ai.notice)}</p>`:''}<div class="feedback-bar"><h2>处理反馈</h2><div class="feedback-options">${['已解决','需要开发介入','判断不正确'].map(s=>`<button class="text-button ${feedbackStatus===s?'selected':''}" data-feedback="${s}">${s}</button>`).join('')}</div><label>处理备注<textarea id="feedback-note" maxlength="2000" placeholder="记录最终原因或需要继续核实的情况">${esc(r.feedback?.note||'')}</textarea></label><div class="feedback-submit"><button class="primary" id="save-feedback">保存反馈</button></div></div></div><aside class="report-side"><h3>排查过程</h3><div class="steps">${r.steps.map(s=>`<div class="step"><b>${esc(s.title)}</b><p>${esc(s.detail)}</p><small>${s.count} 项结果</small></div>`).join('')}</div><div class="side-section"><h3>本次问题</h3><p>${esc(r.question||'未填写问题描述')}</p></div><div class="side-section"><h3>数据与来源</h3><p>交易与日志：沙箱数据集<br>业务规则：${esc(r.repository?r.repository+' / master@'+r.commit.slice(0,8):'v1.0')}<br>基础诊断：规则分析</p><p>当前数据用于业务验证，未连接生产交易系统。</p></div></aside></div>`;
 PayTraceGraph.current=r;PayTraceGraph.bind(r,{onEvidence:openEvidence,onAnalyze:()=>{$('#ai-section-title').scrollIntoView({behavior:'smooth',block:'start'});runAi(r)}});bindInvestigation(r);$('#analyze-ai').addEventListener('click',()=>runAi(r));$('#export').addEventListener('click',exportReport);document.querySelectorAll('[data-feedback]').forEach(b=>b.addEventListener('click',()=>{feedbackStatus=b.dataset.feedback;document.querySelectorAll('[data-feedback]').forEach(x=>x.classList.toggle('selected',x===b))}));$('#save-feedback').addEventListener('click',async()=>{if(!feedbackStatus)return toast('请先选择处理结果');$('#save-feedback').disabled=true;try{current=await api('/investigations/'+r.id+'/feedback','POST',{status:feedbackStatus,note:$('#feedback-note').value});toast('反馈已保存')}catch(e){toast(e.message)}finally{$('#save-feedback').disabled=false}})}
 function exportReport(){const r=reportForDisplay(current);const text=`# 支付交易排查单\n\n交易：${r.transaction.id}\n商户：${r.transaction.merchant}\n时间：${r.createdAt}\n问题：${r.question}\n诊断方式：${r.mode}${investigationMarkdown(r)}\n\n## ${r.title}\n${r.summary}\n\n## 证据\n${r.evidence.map(e=>`- [${e.id}] ${e.service} ${e.file}:${e.line}\n  ${e.text}`).join('\n')}\n\n## 操作建议\n${r.actions.map((a,i)=>`${i+1}. ${a}`).join('\n')}\n\n## 待确认\n${r.uncertainties.join('\n')}\n\n## AI 补充分析（需人工复核）\n${r.ai.text}\n\n## 处理反馈\n${r.feedback?.status||'未反馈'}\n${r.feedback?.note||''}\n`;const url=URL.createObjectURL(new Blob([text],{type:'text/markdown;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=r.transaction.id+'-排查单.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
@@ -47,25 +54,34 @@ function renderHistory(){
   });
   $('#history-summary').innerHTML=[['排查记录',historyRows.length],['待反馈',historyRows.filter(r=>!r.feedback?.status).length],['已解决',historyRows.filter(r=>r.feedback?.status==='已解决').length],['AI 已分析',historyRows.filter(r=>r.ai?.status==='completed').length]].map(([label,count])=>`<div><span>${label}</span><b>${count}</b></div>`).join('');
   $('#history-count').textContent=activeWorkspace.name+' · 当前显示 '+rows.length+' / '+historyRows.length+' 条记录';
-  $('#history-list').innerHTML=rows.length?`<div class="table-scroll"><table class="history-table"><thead><tr><th>交易流水号 / 商户</th><th>排查结论</th><th>创建时间</th><th>处理状态</th><th>AI 分析</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr data-report="${esc(r.id)}" tabindex="0"><td>${esc(r.transaction.id)}<small class="history-merchant">${esc(r.transaction.merchant)}</small></td><td>${esc(r.title)}</td><td>${esc(new Date(r.createdAt).toLocaleString('zh-CN'))}</td><td><span class="tag ${r.feedback?.status==='已解决'?'':'amber'}">${esc(r.feedback?.status||'待反馈')}</span></td><td>${r.ai?.status==='completed'?'已分析':'未分析'}</td><td>↗</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty-history">${historyRows.length?'没有符合筛选条件的记录，请调整搜索条件。':'当前工作空间还没有排查记录。'}</div>`;
+  $('#history-list').innerHTML=rows.length?`<div class="table-scroll"><table class="history-table"><thead><tr><th>交易流水号 / 商户</th><th>排查结论</th><th>创建时间</th><th>处理状态</th><th>AI 分析</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr data-report="${esc(r.id)}" tabindex="0"><td>${esc(r.transaction.id)}<small class="history-merchant">${esc(r.transaction.merchant)}</small></td><td>${esc(r.title)}</td><td>${esc(new Date(r.createdAt).toLocaleString('zh-CN'))}</td><td><span class="tag ${r.feedback?.status==='已解决'?'':'amber'}">${esc(r.feedback?.status||'待反馈')}</span></td><td>${r.ai?.status==='completed'?'已分析':'未分析'}</td><td><button type="button" class="text-button danger-action" data-delete-report="${esc(r.id)}">删除</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty-history">${historyRows.length?'没有符合筛选条件的记录，请调整搜索条件。':'当前工作空间还没有排查记录。'}</div>`;
   document.querySelectorAll('[data-report]').forEach(el=>{
     const open=()=>{current=rows.find(r=>r.id===el.dataset.report);view('workbench');renderReport();$('#transaction-id').value=current.transaction.id;$('#question').value=current.question};
-    el.addEventListener('click',open);el.addEventListener('keydown',e=>{if(e.key==='Enter')open()});
+    el.addEventListener('click',e=>{if(!e.target.closest('[data-delete-report]'))open()});el.addEventListener('keydown',e=>{if(e.target===el&&e.key==='Enter')open()});
   });
 }
+$('#history-list').addEventListener('click',async e=>{
+  const button=e.target.closest('[data-delete-report]');if(!button||button.disabled)return;
+  const scope=workspaceId,id=button.dataset.deleteReport;
+  if(!confirm('删除这条排查记录及其反馈、补证和 AI 分析？此操作无法撤销。'))return;
+  button.disabled=true;
+  try{if(current?.id===id)aiJob?.controller.abort();await api('/investigations/'+id,'DELETE',undefined,scope);
+    if(scope===workspaceId){if(current?.id===id){current=null;$('#result').replaceChildren();$('#result').hidden=true;$('#empty').hidden=false}await loadHistory();toast('排查记录已删除')}
+  }catch(error){button.disabled=false;toast(error.message)}
+});
 $('#history-search').addEventListener('input',renderHistory);
 $('#history-feedback').addEventListener('change',renderHistory);
 $('#history-ai').addEventListener('change',renderHistory);
 $('#history-reset').addEventListener('click',()=>{resetHistoryFilters();renderHistory()});
-async function loadSettings(){try{const services=await api('/services');$('#service-list').innerHTML=services.map(s=>`<div class="service" data-service="${esc(s.name)}"><div><h3>${esc(s.name)}</h3><p>${esc(s.role||activeWorkspace.services.find(x=>x.name===s.name)?.role||'业务服务')} · ${esc(s.version||activeWorkspace.commit.slice(0,8)||'v1.0')}</p></div><label>日志文件<input value="${esc(s.logFile)}" readonly></label><label class="switch"><input type="checkbox" ${s.enabled?'checked':''}>启用</label></div>`).join('');}catch(e){toast(e.message)}}
+async function loadSettings(){try{const scope=workspaceId,services=await api('/services');if(scope!==workspaceId)return;$('#settings-form').hidden=!!activeWorkspace.custom;$('.sandbox-source-heading').hidden=!!activeWorkspace.custom;$('#service-list').innerHTML=services.map(s=>`<div class="service" data-service="${esc(s.name)}"><div><h3>${esc(s.name)}</h3><p>${esc(s.role||activeWorkspace.services.find(x=>x.name===s.name)?.role||'业务服务')} · ${esc(s.version||activeWorkspace.commit.slice(0,8)||'v1.0')}</p></div><label>日志文件<input value="${esc(s.logFile)}" readonly></label><label class="switch"><input type="checkbox" ${s.enabled?'checked':''}>启用</label></div>`).join('');}catch(e){toast(e.message)}}
 $('#settings-form').addEventListener('submit',async e=>{e.preventDefault();const body=[...document.querySelectorAll('[data-service]')].map(el=>({name:el.dataset.service,logFile:el.querySelector('input[readonly]').value,enabled:el.querySelector('input[type=checkbox]').checked}));try{await api('/services','PUT',body);toast('服务配置已保存')}catch(e){toast(e.message)}});
-function drawFlow(){const canvas=$('#flow-canvas');if(!canvas||$('#empty').hidden||$('#workbench').hidden)return;const w=canvas.clientWidth,h=canvas.clientHeight,dpr=devicePixelRatio||1;canvas.width=w*dpr;canvas.height=h*dpr;const c=canvas.getContext('2d');c.scale(dpr,dpr);const labels=selectedCase?.pipeline?.map(p=>p.label)||activeWorkspace.flow||activeWorkspace.cases[0].pipeline.map(p=>p.label);const gap=(w-48)/(labels.length-1),y=h/2-8;c.strokeStyle='#cddfdb';c.lineWidth=1;c.beginPath();c.moveTo(24,y);c.lineTo(w-24,y);c.stroke();labels.forEach((label,i)=>{const x=24+gap*i;c.fillStyle=i===3?'#e8bb66':'#148875';c.beginPath();c.arc(x,y,6,0,Math.PI*2);c.fill();c.fillStyle='#f7f9fa';c.beginPath();c.arc(x,y,2,0,Math.PI*2);c.fill();c.fillStyle='#627b7d';c.font='11px -apple-system, sans-serif';c.textAlign=i===0?'left':i===labels.length-1?'right':'center';c.fillText(label,x,y+29);if(i<labels.length-1){c.fillStyle='#9abcb3';c.textAlign='center';c.fillText('›',x+gap/2,y+4)}})}
+function drawFlow(){const canvas=$('#flow-canvas');if(!canvas||$('#empty').hidden||$('#workbench').hidden)return;const w=canvas.clientWidth,h=canvas.clientHeight,dpr=devicePixelRatio||1;canvas.width=w*dpr;canvas.height=h*dpr;const c=canvas.getContext('2d');c.scale(dpr,dpr);const labels=selectedCase?.pipeline?.map(p=>p.label)||activeWorkspace.flow||activeWorkspace.cases[0]?.pipeline.map(p=>p.label)||[];if(labels.length<2)return;const gap=(w-48)/(labels.length-1),y=h/2-8;c.strokeStyle='#cddfdb';c.lineWidth=1;c.beginPath();c.moveTo(24,y);c.lineTo(w-24,y);c.stroke();labels.forEach((label,i)=>{const x=24+gap*i;c.fillStyle=i===3?'#e8bb66':'#148875';c.beginPath();c.arc(x,y,6,0,Math.PI*2);c.fill();c.fillStyle='#f7f9fa';c.beginPath();c.arc(x,y,2,0,Math.PI*2);c.fill();c.fillStyle='#627b7d';c.font='11px -apple-system, sans-serif';c.textAlign=i===0?'left':i===labels.length-1?'right':'center';c.fillText(label,x,y+29);if(i<labels.length-1){c.fillStyle='#9abcb3';c.textAlign='center';c.fillText('›',x+gap/2,y+4)}})}
 window.addEventListener('resize',drawFlow);init();
 
 function syncKnowledgeMode(){
   const enabled=$('#scan-enabled').checked;
   $('#repository-config').hidden=!enabled;
-  $('#knowledge-mode').textContent=enabled?'代码扫描已选择：保存后供未来后端使用，当前尚未扫描。Markdown 文档可作为补充。':'仅使用 Markdown 文档：不触发代码扫描。';
+  $('#knowledge-mode').textContent=enabled?'旧路径配置已选择代码扫描；导入到上方项目卡片后，点击 AI 分析并保存。':'仅使用 Markdown 文档：不触发代码扫描。';
   document.querySelectorAll('#project-list input').forEach(input=>input.disabled=!enabled);
 }
 function addProjectRow(project={name:'',path:'',branch:'master'}){
@@ -73,17 +89,18 @@ function addProjectRow(project={name:'',path:'',branch:'master'}){
   row.innerHTML=`<label>项目名称<input data-field="name" required maxlength="100" placeholder="例如：外卡 trx" value="${esc(project.name)}"></label><label>本地仓库路径<input data-field="path" required maxlength="1000" placeholder="/path/to/project" value="${esc(project.path)}"></label><label>扫描分支<input data-field="branch" maxlength="200" placeholder="master" value="${esc(project.branch)}"></label><button type="button" class="text-button remove-project">移除</button>`;
   row.querySelector('button').addEventListener('click',()=>row.remove());$('#project-list').append(row);syncKnowledgeMode();
 }
-function showKnowledgeSaved(k){$('#knowledge-saved').textContent=k.updatedAt?'已保存到本地 · '+new Date(k.updatedAt).toLocaleString('zh-CN'):(k.markdown?'已载入业务文档 · 修改后请保存':'尚未保存文档')}
+function showKnowledgeSaved(k){$('#knowledge-saved').textContent=k.usingDefault?'已载入默认业务文档 · 点击保存后存入本地':k.updatedAt?'已保存到本地 · '+new Date(k.updatedAt).toLocaleString('zh-CN'):(k.markdown?'已载入业务文档 · 修改后请保存':'尚未保存文档')}
 function markKnowledgeDirty(){$('#knowledge-saved').textContent='有未保存的修改，请点击「保存知识配置」'}
-async function loadKnowledge(){try{const k=await api('/knowledge');$('#scan-enabled').checked=k.scanEnabled;$('#knowledge-markdown').value=k.markdown;$('#project-list').replaceChildren();k.projects.forEach(addProjectRow);syncKnowledgeMode();showKnowledgeSaved(k)}catch(e){toast(e.message)}}
+async function loadKnowledge(){try{const scope=workspaceId,k=await api('/knowledge');if(scope!==workspaceId)return;$('#scan-enabled').checked=k.scanEnabled;$('#knowledge-markdown').value=k.markdown;$('#project-list').replaceChildren();k.projects.forEach(addProjectRow);syncKnowledgeMode();showKnowledgeSaved(k)}catch(e){toast(e.message)}}
 $('#knowledge-form').addEventListener('input',markKnowledgeDirty);
 $('#knowledge-form').addEventListener('click',e=>{if(e.target.closest('#add-project, .remove-project'))markKnowledgeDirty()});
+$('#clear-markdown').addEventListener('click',()=>{if(confirm('清空当前编辑器中的业务文档？点击保存知识配置后生效。')){$('#knowledge-markdown').value='';markKnowledgeDirty()}});
 $('#download-markdown').addEventListener('click',()=>{const text=$('#knowledge-markdown').value;if(!text.trim())return toast('请先填写或导入 Markdown 文档');const url=URL.createObjectURL(new Blob([text],{type:'text/markdown;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='PayTrace-业务知识.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
 $('#scan-enabled').addEventListener('change',syncKnowledgeMode);
 $('#add-project').addEventListener('click',()=>addProjectRow());
 $('#markdown-file').addEventListener('change',async e=>{
-  const file=e.target.files[0];if(!file)return;
-  try{if(!/\.(md|markdown)$/i.test(file.name))throw Error('请选择 Markdown 文件');if(file.size>400000)throw Error('文档过大，请选择 400 KB 以内的文件');const text=await file.text();if(text.length>100000)throw Error('文档请控制在 10 万字以内');$('#knowledge-markdown').value=text;markKnowledgeDirty();toast('文档已导入，请保存知识配置')}catch(error){toast(error.message)}finally{e.target.value=''}
+  const scope=workspaceId,file=e.target.files[0];if(!file)return;
+  try{if(!/\.(md|markdown)$/i.test(file.name))throw Error('请选择 Markdown 文件');if(file.size>400000)throw Error('文档过大，请选择 400 KB 以内的文件');const text=await file.text();if(text.length>100000)throw Error('文档请控制在 10 万字以内');if(scope!==workspaceId)return;$('#knowledge-markdown').value=text;markKnowledgeDirty();toast('文档已导入，请保存知识配置')}catch(error){toast(error.message)}finally{e.target.value=''}
 });
 $('#knowledge-form').addEventListener('submit',async e=>{
   e.preventDefault();const projects=[...document.querySelectorAll('.project-row')].map(row=>Object.fromEntries([...row.querySelectorAll('[data-field]')].map(input=>[input.dataset.field,input.value]))).filter(p=>p.name.trim()||p.path.trim());
@@ -168,7 +185,7 @@ async function runAi(report){
   }
 }
 
-let loadedModel=null,modelStore={activeId:null,providers:[]},modelBusy=false;
+let loadedModel=null,modelStore={activeId:null,providers:[]},modelBusy=false,modelLoadVersion=0;
 async function modelRequest(endpoint,method='GET',body){
   if(location.protocol==='file:')throw Error('请运行 npm start，并通过 http://127.0.0.1:5173 配置模型');
   const response=await fetch('/api/ai/'+endpoint,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(65000)});
@@ -178,11 +195,11 @@ async function modelRequest(endpoint,method='GET',body){
 function renderProviders(){
   $('#provider-list').innerHTML=modelStore.providers.length?modelStore.providers.map(p=>{
     const active=p.id===modelStore.activeId;
-    return `<article class="provider-card ${active?'is-active':''}"><div class="provider-card-top"><div class="provider-icon" aria-hidden="true">${p.provider==='ollama'?'L':'AI'}</div><div class="provider-title"><h3>${esc(p.name)}</h3><span>${p.provider==='ollama'?'Ollama · 本地模型':'Chat Completions · 兼容接口'}</span></div><span class="provider-badge ${active?'active-badge':''}">${active?(p.enabled?'● 当前使用':'当前服务 · 待完善'):'备用'}</span></div><div class="provider-detail"><strong>${esc(p.model)}</strong><span title="${esc(p.base)}">${esc(p.base)}</span></div><div class="provider-card-bottom"><span class="provider-key">${p.provider==='ollama'?'本地连接 · 无需密钥':p.hasKey?'密钥已保存':'待配置密钥'}</span><div class="provider-buttons"><button type="button" class="text-button" data-model-action="test" data-model-id="${esc(p.id)}" ${!p.enabled?'disabled':''}>测试</button><button type="button" class="text-button" data-model-action="edit" data-model-id="${esc(p.id)}">编辑</button><button type="button" class="text-button delete-model" data-model-action="delete" data-model-id="${esc(p.id)}" ${active?'disabled title="请先切换到其他服务商"':''}>删除</button><button type="button" class="${active?'provider-current':'primary'}" data-model-action="activate" data-model-id="${esc(p.id)}" ${active||!p.enabled?'disabled':''}>${active?'已选用':'启用'}</button></div></div></article>`;
+    return `<article class="provider-card ${active?'is-active':''}"><div class="provider-card-top"><div class="provider-icon" aria-hidden="true">${p.provider==='ollama'?'L':'AI'}</div><div class="provider-title"><h3>${esc(p.name)}</h3><span>${p.provider==='ollama'?'Ollama · 本地模型':'Chat Completions · 兼容接口'}</span></div><span class="provider-badge ${active?'active-badge':''}">${active?(p.enabled?'● 当前使用':'当前服务 · 待完善'):'备用'}</span></div><div class="provider-detail"><strong>${esc(p.model)}</strong><span title="${esc(p.base)}">${esc(p.base)}</span></div><div class="provider-card-bottom"><span class="provider-key">${p.provider==='ollama'?'本地连接 · 无需密钥':p.hasKey?'密钥已保存':'待配置密钥'}</span><div class="provider-buttons"><button type="button" class="text-button" data-model-action="test" data-model-id="${esc(p.id)}" ${!p.enabled?'disabled':''}>测试</button><button type="button" class="text-button" data-model-action="edit" data-model-id="${esc(p.id)}">编辑</button><button type="button" class="text-button delete-model" data-model-action="delete" data-model-id="${esc(p.id)}">删除</button><button type="button" class="${active?'provider-current':'primary'}" data-model-action="activate" data-model-id="${esc(p.id)}" ${active||!p.enabled?'disabled':''}>${active?'已选用':'启用'}</button></div></div></article>`;
   }).join(''):'<div class="provider-empty"><h3>添加第一个模型服务</h3><p>接入云端兼容接口或本地 Ollama，开始使用 AI 辅助排查。</p><button class="text-button" type="button" data-model-action="add">＋ 添加服务商</button></div>';
 }
 function modelControls(busy){
-  modelBusy=busy;
+  if(busy)++modelLoadVersion;modelBusy=busy;
   $('#model-form').querySelectorAll('input,select,button').forEach(el=>el.disabled=busy);
   $('#close-model').disabled=busy;$('#add-model').disabled=busy;
   if(busy)$('#provider-list').querySelectorAll('button').forEach(el=>el.disabled=true);else renderProviders();
@@ -200,13 +217,14 @@ function syncModelForm(){
   $('#ai-key-state').textContent=ollama?'本地 Ollama 无需 API Key。':same&&loadedModel.hasKey?'密钥已保存，留空保留，输入新值可替换。':'请输入 API Key，更换地址后需重新填写。';
 }
 async function loadModelConfig(){
-  if(modelBusy)return;
+  if(modelBusy||window.workspaceMutation)return;
+  const version=++modelLoadVersion;$('#provider-list').replaceChildren();
   $('#add-model').disabled=true;$('#provider-feedback').textContent='正在读取本机配置…';
-  try{modelStore=await modelRequest('providers');renderProviders();refreshModelStatus();$('#add-model').disabled=false;$('#provider-feedback').textContent=''}
-  catch(e){$('#provider-list').innerHTML='';$('#provider-feedback').textContent=e.message}
+  try{const store=await modelRequest('providers');if(version!==modelLoadVersion||modelBusy)return;modelStore=store;renderProviders();refreshModelStatus();$('#add-model').disabled=false;$('#provider-feedback').textContent=''}
+  catch(e){if(version!==modelLoadVersion||modelBusy)return;$('#provider-list').innerHTML='';$('#provider-feedback').textContent=e.message}
 }
 function openModel(id){
-  if(modelBusy)return;
+  if(modelBusy||window.workspaceMutation)return;
   loadedModel=modelStore.providers.find(p=>p.id===id)||null;
   $('#model-form').reset();$('#model-dialog-title').textContent=loadedModel?'编辑服务商':'添加服务商';
   $('#model-presets').hidden=!!loadedModel;
@@ -246,7 +264,8 @@ $('#provider-list').addEventListener('click',async e=>{
   const action=button.dataset.modelAction,id=button.dataset.modelId;
   if(action==='edit'||action==='add'){openModel(id);return;}
   const entry=modelStore.providers.find(p=>p.id===id);
-  if(action==='delete'&&!confirm('删除服务商“'+entry.name+'”及其本机密钥？'))return;
+  if(!entry)return;
+  if(action==='delete'&&!confirm('删除服务商“'+entry.name+'”及其本机密钥？'+(id===modelStore.activeId?'删除当前服务后，AI 将处于未启用状态，需手动启用其他服务。':'')))return;
   modelControls(true);$('#provider-feedback').textContent=action==='test'?'正在测试“'+entry.name+'”，最长等待约 60 秒…':'正在更新配置…';
   try{
     const result=await modelRequest(action==='test'?'test':'providers','POST',action==='test'?{id,savedOnly:true}:{id,action});
@@ -297,10 +316,10 @@ function reportForDisplay(report){
 
 function renderWorkspaceOverview(){
   const w=activeWorkspace;
-  $('#workspace-repository').textContent=w.repository||'支付业务';
+  $('#workspace-repository').textContent=w.custom?'自定义工作空间':w.repository||'支付业务';
   $('#settings-workspace').textContent=w.name+' / 服务管理';
-  $('#flow-note').textContent=w.repository?'业务步骤依据代码整理；cb_common 为共享模块，不是独立服务。':'同步受理与异步通知分别核实';
-  $('#workspace-overview').innerHTML=`<div class="workspace-summary"><div><h2>${esc(w.name)}</h2><p>${esc(w.description)}</p></div><span class="tag">${w.businesses.length} 条业务线</span></div><div class="business-chips">${w.businesses.map(b=>`<span>${esc(b)}</span>`).join('')}</div>${w.repository?`<details class="workspace-origin"><summary>代码依据：${esc(w.repository)} · master · ${esc(w.commit.slice(0,8))}</summary><p>业务入口、分支与任务关系来自本次静态代码审阅。交易、金额及日志为沙箱预设，不代表真实执行记录。点击业务案例查看对应链路与来源文件。</p></details>`:'<p class="workspace-origin">渠道支付、平台交易与商户订单分别核实。</p>'}`;
+  $('#flow-note').textContent=w.custom?'等待接入业务链路':w.repository?'业务步骤依据代码整理；cb_common 为共享模块，不是独立服务。':'同步受理与异步通知分别核实';
+  $('#workspace-overview').innerHTML=`<div class="workspace-summary"><div><h2>${esc(w.name)}</h2><p>${esc(w.description)}</p></div><span class="tag">${w.businesses.length} 条业务线</span></div><div class="business-chips">${w.businesses.map(b=>`<span>${esc(b)}</span>`).join('')}</div>${w.repository?`<details class="workspace-origin"><summary>代码依据：${esc(w.repository)} · master · ${esc(w.commit.slice(0,8))}</summary><p>业务入口、分支与任务关系来自本次静态代码审阅。交易、金额及日志为沙箱预设，不代表真实执行记录。点击业务案例查看对应链路与来源文件。</p></details>`:w.custom?'<p class="workspace-origin">独立业务空间 · 配置项目并运行 AI 分析后，在此展示业务链路。</p>':'<p class="workspace-origin">渠道支付、平台交易与商户订单分别核实。</p>'}<div id="project-overview-results"></div>`;window.loadProjectOverview?.();
 }
 function businessPipelinePanel(r){
   return `<section class="business-pipeline"><div class="section-title"><h2>${esc(r.transaction.business)} · 业务链路</h2><span>${esc(r.workspaceName)}</span></div><ol class="pipeline-nodes">${r.pipeline.map((p,i)=>`<li><span class="pipeline-number">${String(i+1).padStart(2,'0')}</span><h3>${esc(p.label)}</h3><p>${esc(p.service)}</p><small>${esc(p.detail)}</small></li>`).join('')}</ol><p>以上为代码中的业务路径，不表示每一步已执行。下方日志证据记录当前案例的已知进展。</p><div class="service-coverage">${[...new Set(r.pipeline.map(p=>p.service))].map(service=>{const evidence=r.evidence.filter(e=>e.service===service);return `<div><b>${esc(service)}</b><span>${evidence.length?'已关联 '+evidence.length+' 条记录':'当前无日志证据'}</span>${evidence.map(e=>`<button type="button" class="evidence-link" data-evidence="${esc(e.id)}">[${esc(e.id)}] ${esc(e.text.match(/event=(\S+)/)?.[1]||'记录')}</button>`).join('')}</div>`}).join('')}</div><details class="source-references"><summary>查看代码来源 · ${r.sources.length} 处依据</summary><p>${esc(r.repository)} / master / ${esc(r.commit)}<br>共享模块 cb_common 的调用发生在宿主服务内；消息与回调是异步路径。</p>${r.sources.map(s=>`<article><b>${esc(s.symbol)}</b><code>${esc(s.file)}:${s.line}</code><p>${esc(s.note)}</p></article>`).join('')}</details></section>`;
