@@ -1,0 +1,63 @@
+frontend/app.js
+  s_ac253334711626::t_dce2a99438df10 9,11,15
+  s_ac253334711626::t_9c1785390a438d 1-8,10,12-14,16-18
+frontend/mock-api.js
+  s_ac253334711626::t_9c1785390a438d 1-70
+package.json
+  s_ac253334711626::t_b573e0bce02bbe 1-6
+.gitignore
+  s_ac253334711626::t_3179d5f2c745b1 1-4
+docs/architecture.md
+  s_ac253334711626::t_b573e0bce02bbe 3-4
+  s_ac253334711626::t_9c3b60d4952f0a 1-2,5-70
+src/test/java/com/paytrace/demo/InvestigationServiceTest.java
+  s_ac253334711626::t_9c3b60d4952f0a 1-32
+src/main/java/com/paytrace/demo/ApiController.java
+  s_ac253334711626::t_4e6bac80630b7f 1-60
+docs/PayTrace演示说明与后续技术架构.md
+  s_ac253334711626::t_2e910511b6a7f5 1-421
+demo/logs/trx.log
+  s_ac253334711626::t_3c717ff71c1839 1-8
+src/main/java/com/paytrace/demo/Application.java
+  s_ac253334711626::t_3179d5f2c745b1 1-9
+frontend/index.html
+  s_ac253334711626::t_9c1785390a438d 1-4,6-8,10-12,14-15
+  s_ac253334711626::t_141767e2e11844 5,9,13
+frontend/style.css
+  s_ac253334711626::t_97b5a36a558fba 1-212
+scripts/serve.mjs
+  s_ac253334711626::t_b573e0bce02bbe 1-21
+settings.xml
+  s_ac253334711626::t_294de682a6c98d 1-3
+src/main/java/com/paytrace/demo/InvestigationService.java
+  s_ac253334711626::t_5a8431f2d537d9 1-163
+pom.xml
+  s_ac253334711626::t_3179d5f2c745b1 1-11
+src/main/resources/application.properties
+  s_ac253334711626::t_3179d5f2c745b1 1-5
+demo/code/NotificationPolicy.java
+  s_ac253334711626::t_3c717ff71c1839 1-9
+demo/logs/daemon.log
+  s_ac253334711626::t_3c717ff71c1839 1-6
+README.md
+  s_ac253334711626::t_c9a1e347773928 1,3,5,7,9,11,14,17,19,21,23-27,29,31,33-39,41
+  s_ac253334711626::t_9c3b60d4952f0a 2,4,6,8,10,12-13,15-16,18,20,22,28,30,32,40
+demo/transactions.json
+  s_ac253334711626::t_3c717ff71c1839 1-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "780155d02dd772b87d73ac2aef9a25c02e55f73a",
+  "prompts": {},
+  "sessions": {
+    "s_ac253334711626": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0bca8-4959-7042-83d6-28dbd2a02406",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
