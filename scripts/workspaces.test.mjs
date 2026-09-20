@@ -132,3 +132,16 @@ test('explicitly empty knowledge stays empty after reload and reports delete onl
   fail();await assert.rejects(api('/investigations/'+b.id,'DELETE',undefined,'hk-cb'),/未保存/);
   assert.equal((await api('/investigations','GET',undefined,'hk-cb')).length,1);
 });
+
+test('bulk report deletion is atomic, validates all IDs and isolates workspaces',async()=>{
+  const {api,fail}=setup();
+  const a=await api('/investigations','POST',{transactionId:'T202609200001'});
+  const b=await api('/investigations','POST',{transactionId:'T202609200002'});
+  const other=await api('/investigations','POST',{transactionId:'HK202609200001'},'hk-cb');
+  for(const ids of [[],[a.id,a.id],[a.id,'missing'],[a.id,other.id]])await assert.rejects(api('/investigations','DELETE',{ids}));
+  assert.equal((await api('/investigations')).length,2);
+  await api('/investigations','DELETE',{ids:[a.id,b.id]});assert.equal((await api('/investigations')).length,0);
+  assert.equal((await api('/investigations','GET',undefined,'hk-cb')).length,1);
+  fail();await assert.rejects(api('/investigations','DELETE',{ids:[other.id]},'hk-cb'),/未保存/);
+  assert.equal((await api('/investigations','GET',undefined,'hk-cb')).length,1);
+});

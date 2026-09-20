@@ -4,6 +4,7 @@ let transactions=[], current=null, feedbackStatus='', busy=false, historyRows=[]
 window.addEventListener('paytrace:logout',()=>{aiJob?.controller.abort();window.cancelProjectAnalysis?.();});
 let workspaceId=window.workspaceCatalog[0].id;
 try{const saved=localStorage.getItem('paytrace.workspace');if(window.workspaceCatalog.some(w=>w.id===saved))workspaceId=saved}catch{}
+let historyPage=1,historyPageSize=10,historySelection=new Set(),historyDeleting=false;
 let workspaceViewVersion=0;
 let activeWorkspace=window.workspaceData.get(workspaceId),selectedCase=null;
 $('#workspace-select').innerHTML=window.workspaceCatalog.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('');
@@ -35,7 +36,15 @@ if(transactions.length)choose(transactions[0].id);else{$('#transaction-id').valu
 const status=await api('/status');if(scope!==workspaceId||version!==workspaceViewVersion)return;$('#model-label').textContent=status.enabled?'AI 已配置 · '+status.model:'规则诊断 · AI 待配置';drawFlow()}catch(e){$('#error').textContent=e.message;$('#error').hidden=false}}
 $('#investigate-form').addEventListener('submit',async e=>{e.preventDefault();if(activeWorkspace.custom){toast('当前空间可在服务配置中查询服务器日志；交易查询与自动生成报告尚未接入');return;}if(busy)return;aiJob?.controller.abort();busy=true;$('#run').disabled=true;$('#run').textContent='排查中…';$('#loading').hidden=false;$('#error').hidden=true;$('#result').hidden=true;$('#empty').hidden=true;try{current=await api('/investigations','POST',{transactionId:$('#transaction-id').value,question:$('#question').value});renderReport()}catch(e){$('#error').textContent=e.message;$('#error').hidden=false;$('#empty').hidden=false}finally{busy=false;$('#run').disabled=false;$('#run').innerHTML='开始排查 <span>↗</span>';$('#loading').hidden=true}});
 function renderReport(){aiJob?.controller.abort();const r=reportForDisplay(current),t=r.transaction;feedbackStatus=r.feedback?.status||'';$('#empty').hidden=true;$('#result').hidden=false;$('#result').innerHTML=`<div class="result-heading"><div><h2>排查报告 <span class="tag ${r.diagnosis==='待核实'?'amber':''}">${esc(r.diagnosis)}</span></h2><p>${esc(new Date(r.createdAt).toLocaleString('zh-CN'))} · ${esc(r.mode)} · ${(r.durationMs/1000).toFixed(2)}s</p></div><button class="text-button" id="export">↓ 导出排查单</button></div>${PayTraceGraph.render(r)}${investigationPanel(r)}<div class="report-grid"><div><div class="facts">${[['交易流水号',t.id],['交易金额',t.currency+' '+t.amount],['业务状态',t.statusLabel||{SUCCESS:'支付成功',FAILED:'支付失败',PROCESSING:'处理中'}[t.status]||t.status],['商户',t.merchant],['渠道',t.channel],['渠道流水号',t.channelId],['交易时间',t.time],['业务环境',(r.workspaceName||'外卡支付')+' · 沙箱']].map(([k,v])=>`<div><small>${esc(k)}</small><b>${esc(v)}</b></div>`).join('')}</div><div class="conclusion ${r.diagnosis==='待核实'?'pending':''}"><span class="tag">诊断结论</span><h2>${esc(r.title)}</h2><p>${esc(r.summary)}</p></div><div class="section-title"><h2>日志证据</h2><span>${r.evidence.length} 条精确关联记录</span></div>${r.evidence.length?r.evidence.map(e=>`<details class="evidence" id="evidence-${esc(e.id)}"><summary><span class="tag">${esc(e.id)}</span><b>${esc(e.service)}</b><span>${esc(e.text.match(/event=(\S+)/)?.[1]||'日志记录')}</span><span class="location">${esc(e.file)}:${e.line}</span></summary><code class="log">${esc(e.text)}</code><p class="context-label">匹配标识：${esc(e.matchedBy)} · 下方相邻行仅为上下文，可能包含其他交易</p><pre>${esc(e.context)}</pre></details>`).join(''):'<p>没有找到可用日志证据。</p>'}${r.code.text?`<details class="evidence"><summary><span class="tag">CODE</span><b>通知重试策略</b><span class="location">${esc(r.code.version)}</span></summary><p>${esc(r.code.file)}</p><pre>${esc(r.code.text)}</pre></details>`:''}<div class="section-title"><h2>运营下一步</h2><span>人工确认后执行</span></div><ol class="actions">${r.actions.map(a=>`<li>${esc(a)}</li>`).join('')}</ol><div class="uncertainty"><b>仍需确认</b><br>${r.uncertainties.map(esc).join('<br>')}</div><div class="section-title"><h2 id="ai-section-title" tabindex="-1">AI 证据分析</h2><span id="ai-result-state">${esc({disabled:'待分析',completed:r.ai.model,failed:'调用失败'}[r.ai.status])}</span></div><p>点击后将本次交易信息、问题、匹配日志和已保存的 Markdown 发送给已配置的模型。不会读取本地代码仓库。</p><button class="primary" id="analyze-ai" type="button">${r.ai.status==='completed'?'重新分析':'AI 分析'}</button><button class="text-button" id="stop-ai" type="button" hidden>停止分析</button><p id="ai-progress" role="status"></p><div id="ai-live" class="ai-live" hidden><ol id="ai-stages" class="ai-stages"></ol><div id="ai-output-sections" class="ai-output-sections"></div><div id="ai-stream-text" class="ai-text"></div></div><div id="ai-saved-text" class="ai-text">${aiTextWithReferences(r)}</div>${r.ai.status==='completed'?`<p class="ai-metadata">${esc(r.ai.model||'已配置模型')}${r.ai.analyzedAt?' · '+esc(new Date(r.ai.analyzedAt).toLocaleString('zh-CN')):''}${Number.isFinite(r.ai.durationMs)?' · 耗时 '+(r.ai.durationMs/1000).toFixed(1)+' 秒':''} · 引用编号可点击查看</p>`:''}${r.ai.notice?`<p>${esc(r.ai.notice)}</p>`:''}<div class="feedback-bar"><h2>处理反馈</h2><div class="feedback-options">${['已解决','需要开发介入','判断不正确'].map(s=>`<button class="text-button ${feedbackStatus===s?'selected':''}" data-feedback="${s}">${s}</button>`).join('')}</div><label>处理备注<textarea id="feedback-note" maxlength="2000" placeholder="记录最终原因或需要继续核实的情况">${esc(r.feedback?.note||'')}</textarea></label><div class="feedback-submit"><button class="primary" id="save-feedback">保存反馈</button></div></div></div><aside class="report-side"><h3>排查过程</h3><div class="steps">${r.steps.map(s=>`<div class="step"><b>${esc(s.title)}</b><p>${esc(s.detail)}</p><small>${s.count} 项结果</small></div>`).join('')}</div><div class="side-section"><h3>本次问题</h3><p>${esc(r.question||'未填写问题描述')}</p></div><div class="side-section"><h3>数据与来源</h3><p>交易与日志：沙箱数据集<br>业务规则：${esc(r.repository?r.repository+' / master@'+r.commit.slice(0,8):'v1.0')}<br>基础诊断：规则分析</p><p>当前数据用于业务验证，未连接生产交易系统。</p></div></aside></div>`;
-PayTraceGraph.current=r;PayTraceGraph.bind(r,{onEvidence:openEvidence,onAnalyze:()=>{$('#ai-section-title').scrollIntoView({behavior:'smooth',block:'start'});runAi(r)}});bindInvestigation(r);$('#analyze-ai').addEventListener('click',()=>runAi(r));$('#export').addEventListener('click',exportReport);document.querySelectorAll('[data-feedback]').forEach(b=>b.addEventListener('click',()=>{feedbackStatus=b.dataset.feedback;document.querySelectorAll('[data-feedback]').forEach(x=>x.classList.toggle('selected',x===b))}));$('#save-feedback').addEventListener('click',async()=>{if(!feedbackStatus)return toast('请先选择处理结果');$('#save-feedback').disabled=true;try{current=await api('/investigations/'+r.id+'/feedback','POST',{status:feedbackStatus,note:$('#feedback-note').value});toast('反馈已保存')}catch(e){toast(e.message)}finally{$('#save-feedback').disabled=false}})}
+PayTraceGraph.current=r;PayTraceGraph.bind(r,{onEvidence:openEvidence,onAnalyze:()=>{$('#ai-section-title').scrollIntoView({behavior:'smooth',block:'start'});runAi(r)}});bindInvestigation(r);$('#analyze-ai').addEventListener('click',()=>runAi(r));$('#export').addEventListener('click',exportReport);document.querySelectorAll('[data-feedback]').forEach(b=>b.addEventListener('click',()=>{feedbackStatus=b.dataset.feedback;document.querySelectorAll('[data-feedback]').forEach(x=>x.classList.toggle('selected',x===b))}));$('#save-feedback').textContent='保存并返回记录';$('#save-feedback').addEventListener('click',async()=>{
+  if(!feedbackStatus)return toast('请先选择处理结果');
+  const scope=workspaceId,button=$('#save-feedback'),note=$('#feedback-note').value,status=feedbackStatus;
+  if(button.disabled)return;button.disabled=true;
+  try{const saved=await api('/investigations/'+r.id+'/feedback','POST',{status,note},scope);
+    if(scope===workspaceId&&current?.id===r.id){current=saved;if(!$('#workbench').hidden){view('history');$('#history').scrollIntoView({block:'start'})}toast('反馈已保存')}
+  }catch(e){toast(e.message)}finally{button.disabled=false}
+})}
+
 function exportReport(){const r=reportForDisplay(current);const text=`# 支付交易排查单\n\n交易：${r.transaction.id}\n商户：${r.transaction.merchant}\n时间：${r.createdAt}\n问题：${r.question}\n诊断方式：${r.mode}${investigationMarkdown(r)}\n\n## ${r.title}\n${r.summary}\n\n## 证据\n${r.evidence.map(e=>`- [${e.id}] ${e.service} ${e.file}:${e.line}\n  ${e.text}`).join('\n')}\n\n## 操作建议\n${r.actions.map((a,i)=>`${i+1}. ${a}`).join('\n')}\n\n## 待确认\n${r.uncertainties.join('\n')}\n\n## AI 补充分析（需人工复核）\n${r.ai.text}\n\n## 处理反馈\n${r.feedback?.status||'未反馈'}\n${r.feedback?.note||''}\n`;const url=URL.createObjectURL(new Blob([text],{type:'text/markdown;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=r.transaction.id+'-排查单.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 async function loadHistory(){
   const scope=workspaceId;
@@ -43,6 +52,7 @@ async function loadHistory(){
   catch(e){toast(e.message)}
 }
 function resetHistoryFilters(){
+  historyPage=1;historySelection.clear();
   $('#history-search').value='';$('#history-feedback').value='all';$('#history-ai').value='all';
 }
 function renderHistory(){
@@ -53,26 +63,52 @@ function renderHistory(){
     return (!query||haystack.includes(query))&&(feedback==='all'||(r.feedback?.status||'未反馈')===feedback)&&(ai==='all'||(ai==='completed')===(r.ai?.status==='completed'));
   });
   $('#history-summary').innerHTML=[['排查记录',historyRows.length],['待反馈',historyRows.filter(r=>!r.feedback?.status).length],['已解决',historyRows.filter(r=>r.feedback?.status==='已解决').length],['AI 已分析',historyRows.filter(r=>r.ai?.status==='completed').length]].map(([label,count])=>`<div><span>${label}</span><b>${count}</b></div>`).join('');
-  $('#history-count').textContent=activeWorkspace.name+' · 当前显示 '+rows.length+' / '+historyRows.length+' 条记录';
-  $('#history-list').innerHTML=rows.length?`<div class="table-scroll"><table class="history-table"><thead><tr><th>交易流水号 / 商户</th><th>排查结论</th><th>创建时间</th><th>处理状态</th><th>AI 分析</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr data-report="${esc(r.id)}" tabindex="0"><td>${esc(r.transaction.id)}<small class="history-merchant">${esc(r.transaction.merchant)}</small></td><td>${esc(r.title)}</td><td>${esc(new Date(r.createdAt).toLocaleString('zh-CN'))}</td><td><span class="tag ${r.feedback?.status==='已解决'?'':'amber'}">${esc(r.feedback?.status||'待反馈')}</span></td><td>${r.ai?.status==='completed'?'已分析':'未分析'}</td><td><button type="button" class="text-button danger-action" data-delete-report="${esc(r.id)}">删除</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty-history">${historyRows.length?'没有符合筛选条件的记录，请调整搜索条件。':'当前工作空间还没有排查记录。'}</div>`;
+  const pages=Math.max(1,Math.ceil(rows.length/historyPageSize));historyPage=Math.min(historyPage,pages);
+  const pageRows=rows.slice((historyPage-1)*historyPageSize,historyPage*historyPageSize);
+  const visibleIds=new Set(pageRows.map(r=>r.id));historySelection=new Set([...historySelection].filter(id=>visibleIds.has(id)));
+  $('#history-page-label').textContent='第 '+historyPage+' / '+pages+' 页';
+  $('#history-prev').disabled=historyDeleting||historyPage<=1;$('#history-next').disabled=historyDeleting||historyPage>=pages;
+  $('#history-count').textContent=activeWorkspace.name+' · 筛选结果 '+rows.length+' / '+historyRows.length+' 条，本页 '+pageRows.length+' 条';
+  $('#history-list').innerHTML=rows.length?`<div class="table-scroll"><table class="history-table"><thead><tr><th><input type="checkbox" id="history-select-all" aria-label="全选当前页"></th><th>交易流水号 / 商户</th><th>排查结论</th><th>创建时间</th><th>处理状态</th><th>AI 分析</th><th></th></tr></thead><tbody>${pageRows.map(r=>`<tr data-report="${esc(r.id)}" tabindex="0"><td><input type="checkbox" data-select-report="${esc(r.id)}" aria-label="选择 ${esc(r.transaction.id)}" ${historySelection.has(r.id)?'checked':''}></td><td>${esc(r.transaction.id)}<small class="history-merchant">${esc(r.transaction.merchant)}</small></td><td>${esc(r.title)}</td><td>${esc(new Date(r.createdAt).toLocaleString('zh-CN'))}</td><td><span class="tag ${r.feedback?.status==='已解决'?'':'amber'}">${esc(r.feedback?.status||'待反馈')}</span></td><td>${r.ai?.status==='completed'?'已分析':'未分析'}</td><td><button type="button" class="text-button danger-action" data-delete-report="${esc(r.id)}">删除</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty-history">${historyRows.length?'没有符合筛选条件的记录，请调整搜索条件。':'当前工作空间还没有排查记录。'}</div>`;
+  syncHistorySelection();
   document.querySelectorAll('[data-report]').forEach(el=>{
     const open=()=>{current=rows.find(r=>r.id===el.dataset.report);view('workbench');renderReport();$('#transaction-id').value=current.transaction.id;$('#question').value=current.question};
-    el.addEventListener('click',e=>{if(!e.target.closest('[data-delete-report]'))open()});el.addEventListener('keydown',e=>{if(e.target===el&&e.key==='Enter')open()});
+    el.addEventListener('click',e=>{if(!e.target.closest('[data-delete-report], [data-select-report]'))open()});el.addEventListener('keydown',e=>{if(e.target===el&&e.key==='Enter')open()});
   });
 }
-$('#history-list').addEventListener('click',async e=>{
-  const button=e.target.closest('[data-delete-report]');if(!button||button.disabled)return;
-  const scope=workspaceId,id=button.dataset.deleteReport;
-  if(!confirm('删除这条排查记录及其反馈、补证和 AI 分析？此操作无法撤销。'))return;
-  button.disabled=true;
-  try{if(current?.id===id)aiJob?.controller.abort();await api('/investigations/'+id,'DELETE',undefined,scope);
-    if(scope===workspaceId){if(current?.id===id){current=null;$('#result').replaceChildren();$('#result').hidden=true;$('#empty').hidden=false}await loadHistory();toast('排查记录已删除')}
-  }catch(error){button.disabled=false;toast(error.message)}
+function syncHistorySelection(){
+  const checkboxes=[...document.querySelectorAll('[data-select-report]')],all=$('#history-select-all');
+  if(all){all.checked=checkboxes.length>0&&historySelection.size===checkboxes.length;all.indeterminate=historySelection.size>0&&!all.checked;all.disabled=historyDeleting}
+  checkboxes.forEach(el=>el.disabled=historyDeleting);
+  $('#history-selected-count').textContent='已选 '+historySelection.size+' 条（当前页）';
+  $('#history-delete-selected').disabled=historyDeleting||!historySelection.size;
+}
+async function deleteHistory(ids){
+  if(historyDeleting||!ids.length)return;
+  const scope=workspaceId;
+  if(!confirm('删除选中的 '+ids.length+' 条排查记录及其反馈、补证和 AI 分析？此操作无法撤销。'))return;
+  historyDeleting=true;renderHistory();
+  try{if(ids.includes(current?.id))aiJob?.controller.abort();await api('/investigations','DELETE',{ids},scope);
+    if(scope===workspaceId){if(ids.includes(current?.id)){current=null;$('#result').replaceChildren();$('#result').hidden=true;$('#empty').hidden=false}historySelection.clear();await loadHistory();toast('已删除 '+ids.length+' 条排查记录')}
+  }catch(error){toast(error.message)}finally{historyDeleting=false;renderHistory()}
+}
+$('#history-list').addEventListener('click',e=>{const b=e.target.closest('[data-delete-report]');if(b)deleteHistory([b.dataset.deleteReport])});
+$('#history-list').addEventListener('change',e=>{
+  if(historyDeleting)return;
+  if(e.target.id==='history-select-all'){
+    historySelection.clear();document.querySelectorAll('[data-select-report]').forEach(el=>{el.checked=e.target.checked;if(el.checked)historySelection.add(el.dataset.selectReport)});
+  }else if(e.target.matches('[data-select-report]')){const id=e.target.dataset.selectReport;e.target.checked?historySelection.add(id):historySelection.delete(id)}
+  syncHistorySelection();
 });
-$('#history-search').addEventListener('input',renderHistory);
-$('#history-feedback').addEventListener('change',renderHistory);
-$('#history-ai').addEventListener('change',renderHistory);
+$('#history-delete-selected').onclick=()=>deleteHistory([...historySelection]);
+function historyFilterChanged(){historyPage=1;historySelection.clear();renderHistory()}
+$('#history-search').addEventListener('input',historyFilterChanged);
+$('#history-feedback').addEventListener('change',historyFilterChanged);
+$('#history-ai').addEventListener('change',historyFilterChanged);
 $('#history-reset').addEventListener('click',()=>{resetHistoryFilters();renderHistory()});
+$('#history-page-size').onchange=e=>{historyPageSize=Number(e.target.value);historyFilterChanged()};
+$('#history-prev').onclick=()=>{if(historyPage>1){historyPage--;historySelection.clear();renderHistory()}};
+$('#history-next').onclick=()=>{historyPage++;historySelection.clear();renderHistory()};
 async function loadSettings(){try{const scope=workspaceId,services=await api('/services');if(scope!==workspaceId)return;$('#settings-form').hidden=!!activeWorkspace.custom;$('.sandbox-source-heading').hidden=!!activeWorkspace.custom;$('#service-list').innerHTML=services.map(s=>`<div class="service" data-service="${esc(s.name)}"><div><h3>${esc(s.name)}</h3><p>${esc(s.role||activeWorkspace.services.find(x=>x.name===s.name)?.role||'业务服务')} · ${esc(s.version||activeWorkspace.commit.slice(0,8)||'v1.0')}</p></div><label>日志文件<input value="${esc(s.logFile)}" readonly></label><label class="switch"><input type="checkbox" ${s.enabled?'checked':''}>启用</label></div>`).join('');}catch(e){toast(e.message)}}
 $('#settings-form').addEventListener('submit',async e=>{e.preventDefault();const body=[...document.querySelectorAll('[data-service]')].map(el=>({name:el.dataset.service,logFile:el.querySelector('input[readonly]').value,enabled:el.querySelector('input[type=checkbox]').checked}));try{await api('/services','PUT',body);toast('服务配置已保存')}catch(e){toast(e.message)}});
 function drawFlow(){const canvas=$('#flow-canvas');if(!canvas||$('#empty').hidden||$('#workbench').hidden)return;const w=canvas.clientWidth,h=canvas.clientHeight,dpr=devicePixelRatio||1;canvas.width=w*dpr;canvas.height=h*dpr;const c=canvas.getContext('2d');c.scale(dpr,dpr);const labels=selectedCase?.pipeline?.map(p=>p.label)||activeWorkspace.flow||activeWorkspace.cases[0]?.pipeline.map(p=>p.label)||[];if(labels.length<2)return;const gap=(w-48)/(labels.length-1),y=h/2-8;c.strokeStyle='#cddfdb';c.lineWidth=1;c.beginPath();c.moveTo(24,y);c.lineTo(w-24,y);c.stroke();labels.forEach((label,i)=>{const x=24+gap*i;c.fillStyle=i===3?'#e8bb66':'#148875';c.beginPath();c.arc(x,y,6,0,Math.PI*2);c.fill();c.fillStyle='#f7f9fa';c.beginPath();c.arc(x,y,2,0,Math.PI*2);c.fill();c.fillStyle='#627b7d';c.font='11px -apple-system, sans-serif';c.textAlign=i===0?'left':i===labels.length-1?'right':'center';c.fillText(label,x,y+29);if(i<labels.length-1){c.fillStyle='#9abcb3';c.textAlign='center';c.fillText('›',x+gap/2,y+4)}})}

@@ -80,6 +80,12 @@
       if(method==='PUT'){if(!Array.isArray(body)||body.length!==serviceDefaults.length||!serviceDefaults.every(d=>body.filter(s=>s.name===d.name&&s.logFile===d.logFile&&typeof s.enabled==='boolean').length===1))throw Error('服务配置无效');save('services',body,workspace)}
       return read('services',serviceDefaults,workspace);
     }
+    if(path==='/investigations'&&method==='DELETE'){
+      const ids=body?.ids,reports=read('reports',[],workspace);
+      if(!Array.isArray(ids)||!ids.length||ids.length>200||ids.some(id=>typeof id!=='string')||new Set(ids).size!==ids.length)throw Error('请选择有效的排查记录');
+      if(ids.some(id=>!reports.some(r=>r.id===id)))throw Error('部分排查记录已不存在，请刷新列表后重试');
+      const selected=new Set(ids);save('reports',reports.filter(r=>!selected.has(r.id)),workspace);return {deleted:ids.length};
+    }
     if(path==='/investigations')return method==='POST'?investigate(body,workspace):read('reports',[],workspace);
     const supplementMatch=path.match(/^\/investigations\/([^/]+)\/supplement$/);
     if(supplementMatch&&method==='POST'){
