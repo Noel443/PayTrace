@@ -2,5 +2,8 @@
   "name": "paytrace-prototype",
   "version": "0.1.0",
   "private": true,
-  "scripts": {"start": "node scripts/serve.mjs"}
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test scripts/*.test.mjs"
+  }
 }
