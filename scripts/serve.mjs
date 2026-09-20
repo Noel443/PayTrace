@@ -2,7 +2,7 @@ import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
-import {loadEnv,config,status,analyze} from './ai.mjs';
+import {loadEnv,config,status,analyze,analyzeStream} from './ai.mjs';
 import {publicConfig,candidate,readStore,writeStore,activeConfig,publicStore,changeStore,isLocalConfigRequest} from './model-config.mjs';
 
 await loadEnv();
@@ -55,7 +55,7 @@ const server=http.createServer(async(req,res)=>{
     }catch{if(!res.headersSent)json(res,400,{message:'配置请求未完成，请重试'});}finally{configBusy=false;}
     return;
   }
-  if(req.url==='/api/ai/analyze'&&req.method==='POST'){
+  if(['/api/ai/analyze','/api/ai/analyze/stream'].includes(req.url)&&req.method==='POST'){
     const origin=req.headers.origin;
     if(!origin||![`http://${req.headers.host}`,`https://${req.headers.host}`].includes(origin)){json(res,403,{message:'仅允许同源页面调用'});return;}
     if(!req.headers['content-type']?.startsWith('application/json')){json(res,415,{message:'需要 JSON 请求'});return;}
@@ -63,13 +63,24 @@ const server=http.createServer(async(req,res)=>{
     if(active>=2||attempts.length>=10){json(res,429,{message:'分析请求过于频繁，请稍后重试'});return;}
     if(!aiConfig.enabled){json(res,503,{message:'请在本机服务配置页面保存模型连接信息'});return;}
     const requestConfig=aiConfig;
+    const streaming=req.url.endsWith('/stream'),controller=new AbortController();
+    const disconnect=()=>{if(!res.writableEnded)controller.abort()};
+    res.on('close',disconnect);
+    const emit=(event,data)=>{if(!res.destroyed&&!res.writableEnded)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
     active++;attempts.push(now);
     try{
       const chunks=[];let size=0;
       for await(const chunk of req){size+=chunk.length;if(size>512000){json(res,413,{message:'请求过大，请缩短文档'});return;}chunks.push(chunk);}
       let input;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{json(res,400,{message:'请求 JSON 无效'});return;}
-      const result=await analyze(requestConfig,input);json(res,200,result);
-    }catch(e){json(res,502,{message:e.message||'模型分析失败'});}finally{active--;}
+      if(streaming){
+        if(res.destroyed)return;
+        res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'});res.flushHeaders();
+        const result=await analyzeStream(requestConfig,input,emit,{signal:controller.signal});
+        emit('done',result);res.end();
+      }else{const result=await analyze(requestConfig,input);json(res,200,result);}
+    }catch(e){
+      if(!res.destroyed){if(res.headersSent){emit('error',{message:e.message||'模型分析失败'});res.end()}else json(res,502,{message:e.message||'模型分析失败'});}
+    }finally{res.off('close',disconnect);active--;}
     return;
   }
   if(!['GET','HEAD'].includes(req.method)){res.writeHead(405);res.end();return;}
