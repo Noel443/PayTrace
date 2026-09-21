@@ -34,7 +34,7 @@ const attempts=[];
 function json(res,code,data){res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));}
 
 const root=fileURLToPath(new URL('../frontend/',import.meta.url));
-const port=Number(process.env.PORT||5173);
+const port=Number(process.env.PORT||19527);
 const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 const server=http.createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
