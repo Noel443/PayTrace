@@ -35,7 +35,7 @@
 <div id="model-presets" class="model-presets" aria-label="快捷配置"><button type="button" data-preset="custom">自定义</button><button type="button" data-preset="deepseek">DeepSeek</button><button type="button" data-preset="qwen">通义千问</button><button type="button" data-preset="ollama">Ollama</button></div>
 <label>服务商名称<input id="ai-name" required maxlength="60" placeholder="例如：运营分析主模型"></label>
 <div class="model-fields"><label>接口类型<select id="ai-provider"><option value="compatible">Chat Completions 兼容接口</option><option value="ollama">本地 Ollama</option></select></label><label>模型名称<input id="ai-model" required placeholder="服务商提供的模型 ID" maxlength="200"></label></div>
-<label>分析超时（秒）<input id="ai-timeout" type="number" min="30" max="3600" step="1" value="300" required></label><p>默认 300 秒，可设置 30–3600 秒。保存后用于该服务商的日志和项目分析；连接测试最多等待 60 秒。</p>
+<label>分析超时（秒）<input id="ai-timeout" type="number" min="30" max="3600" step="1" value="300" required></label><p>默认 300 秒，可设置 30–3600 秒。保存后用于该服务商的日志分析、追问、项目分析和连接测试；编辑时测试使用当前填写的超时，不会自动保存。</p>
 <label>接口根地址<input id="ai-base" type="url" required placeholder="https://api.example.com/v1" maxlength="2000"></label>
 <p id="ai-address-help"></p>
 <label id="ai-key-label">API Key<input id="ai-key" type="password" autocomplete="new-password" maxlength="4096" placeholder="首次填写；已保存则留空保留"></label>

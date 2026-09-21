@@ -257,7 +257,9 @@ async function runAi(report){
 let loadedModel=null,modelStore={activeId:null,providers:[]},modelBusy=false,modelLoadVersion=0;
 async function modelRequest(endpoint,method='GET',body){
   if(location.protocol==='file:')throw Error('请运行 npm start，并通过 http://127.0.0.1:5173 配置模型');
-  const response=await fetch('/api/ai/'+endpoint,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(65000)});
+  const testSeconds=body?.savedOnly?(modelStore.providers.find(p=>p.id===body.id)?.timeoutSeconds??300):(body?.timeoutSeconds??300);
+  const timeoutMs=endpoint==='test'?Number(testSeconds)*1000+5000:65000;
+  const response=await fetch('/api/ai/'+endpoint,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(timeoutMs)});
   let data;try{data=await response.json()}catch{throw Error('本地模型服务不可用，请重启 npm start')}
   if(!response.ok)throw Error(data.message||'模型配置请求失败');return data;
 }
@@ -320,7 +322,7 @@ $('#model-form').addEventListener('input',()=>$('#model-feedback').textContent='
 async function submitModel(test){
   if(modelBusy||!$('#model-form').reportValidity())return;
   const body={action:'save',id:loadedModel?.id,name:$('#ai-name').value,provider:$('#ai-provider').value,base:$('#ai-base').value,model:$('#ai-model').value,timeoutSeconds:Number($('#ai-timeout').value),key:$('#ai-key').value,clearKey:$('#ai-clear').checked,activate:$('#ai-activate').checked};
-  modelControls(true);$('#model-feedback').textContent=test?'正在测试连接，最长等待约 60 秒…':'正在保存服务商配置…';
+  modelControls(true);$('#model-feedback').textContent=test?'正在测试连接，最长等待约 '+body.timeoutSeconds+' 秒…':'正在保存服务商配置…';
   try{
     const result=await modelRequest(test?'test':'providers','POST',body);
     if(test)$('#model-feedback').textContent=result.message;
@@ -337,7 +339,7 @@ $('#provider-list').addEventListener('click',async e=>{
   const entry=modelStore.providers.find(p=>p.id===id);
   if(!entry)return;
   if(action==='delete'&&!confirm('删除服务商“'+entry.name+'”及其已保存密钥？'+(id===modelStore.activeId?'删除当前服务后，AI 将处于未启用状态，需手动启用其他服务。':'')))return;
-  modelControls(true);$('#provider-feedback').textContent=action==='test'?'正在测试“'+entry.name+'”，最长等待约 60 秒…':'正在更新配置…';
+  modelControls(true);$('#provider-feedback').textContent=action==='test'?'正在测试“'+entry.name+'”，最长等待约 '+(entry.timeoutSeconds??300)+' 秒…':'正在更新配置…';
   try{
     const result=await modelRequest(action==='test'?'test':'providers','POST',action==='test'?{id,savedOnly:true}:{id,action});
     if(action==='test')$('#provider-feedback').textContent=entry.name+'：'+result.message;

@@ -3,6 +3,15 @@ import assert from 'node:assert/strict';
 import {analyze,config,status} from './ai.mjs';
 
 const input={report:{transaction:{id:'T1'},question:'为什么超时？',evidence:[{id:'E1',service:'trx',text:'event=TIMEOUT',context:'OTHER TRANSACTION'}]},markdown:'# 业务文档'};
+test('non-streaming connection tests honor the configured timeout and legacy default',async t=>{
+  const durations=[];
+  t.mock.method(AbortSignal,'timeout',ms=>{durations.push(ms);return new AbortController().signal});
+  for(const seconds of [undefined,30,900,3600]){
+    const c=config({AI_PROVIDER:'ollama',AI_MODEL:'local',AI_TIMEOUT_SECONDS:seconds});
+    await analyze(c,input,async()=>({ok:true,json:async()=>({message:{content:'已连接'}})}));
+  }
+  assert.deepEqual(durations,[300000,30000,900000,3600000]);
+});
 test('configuration requires provider, model, address and credentials; status never exposes key',()=>{
   assert.equal(config({}).enabled,false);
   const c=config({AI_MODEL:'demo',AI_BASE_URL:'https://example.test/v1',AI_API_KEY:'secret'});

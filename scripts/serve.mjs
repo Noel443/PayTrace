@@ -221,7 +221,7 @@ const server=http.createServer(async(req,res)=>{
         }
       }catch(e){json(res,400,{message:e.message});return;}
       if(req.url==='/api/ai/test'){
-        try{await analyze(next,{report:{question:'这是连接测试，无交易和日志证据，请简短回答已连接，不做交易判断。',evidence:[]},markdown:''},fetch,{timeoutMs:60000});json(res,200,{message:'连接成功，模型已返回有效文本。测试未修改配置。',model:next.model});}
+        try{await analyze(next,{report:{question:'这是连接测试，无交易和日志证据，请简短回答已连接，不做交易判断。',evidence:[]},markdown:''});json(res,200,{message:'连接成功，模型已返回有效文本。测试未修改配置。',model:next.model});}
         catch(e){json(res,502,{message:e.message});}
       }else{
         try{await saveModels(configFile,next);modelStore=next;aiConfig=activeConfig(modelStore);json(res,200,req.url==='/api/ai/config'?publicConfig(aiConfig):publicStore(modelStore));}
