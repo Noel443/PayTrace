@@ -1,0 +1,26 @@
+scripts/serve.mjs
+  s_e7d1bb90e63034::t_33a56316547add 37
+README.md
+  s_e7d1bb90e63034::t_33a56316547add 153,212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "26c1745b3ed4cea1f058673b55537a24a27e28f5",
+  "prompts": {},
+  "humans": {
+    "h_a10a4d78dc54be": {
+      "author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_e7d1bb90e63034": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c321-480e-7852-83b9-4dde7152429b",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
