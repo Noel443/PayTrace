@@ -5,7 +5,7 @@
   const storageKey=(key,workspace='card')=>prefix+(workspace==='card'?'':workspace+'.')+key;
   function read(key,fallback,workspace='card'){const k=storageKey(key,workspace);try{let value=JSON.parse(localStorage.getItem(k))??structuredClone(fallback);if(key==='reports'&&Array.isArray(value)){const clean=value.filter(r=>!isDemoReport(r));if(clean.length!==value.length){try{localStorage.setItem(k,JSON.stringify(clean))}catch{}value=clean;}}if(key==='reports'&&workspace==='hk-cb')return value.map(r=>({...r,workspaceName:'MSO'}));return value}catch{return structuredClone(fallback)}}
   function save(key,value,workspace='card'){try{localStorage.setItem(storageKey(key,workspace),JSON.stringify(value))}catch{throw Error('本地存储不可用或空间不足，本次未保存，请检查浏览器存储后重试')}}
-  for(const w of window.workspaceCatalog)read('reports',[],w.id);
+  if(window.storageDriver!=='mysql')for(const w of window.workspaceCatalog)read('reports',[],w.id);
   window.localApi=async(path,method='GET',body,workspace='card')=>{
     window.workspaceData.get(workspace);
     const serviceDefaults=window.workspaceData.services(workspace);

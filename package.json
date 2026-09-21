@@ -4,6 +4,12 @@
   "private": true,
   "scripts": {
     "start": "node scripts/serve.mjs",
-    "test": "node --test scripts/*.test.mjs"
+    "test": "node --test scripts/*.test.mjs",
+    "db:export": "node scripts/export-mysql-seed.mjs",
+    "db:password": "node scripts/change-password.mjs",
+    "test:mysql": "node --test scripts/mysql.integration.mjs"
+  },
+  "dependencies": {
+    "mysql2": "^3.24.4"
   }
 }

@@ -1,0 +1,10 @@
+{
+  "driver": "mysql",
+  "host": "127.0.0.1",
+  "port": 3306,
+  "database": "paytrace",
+  "user": "paytrace",
+  "password": "填写你的数据库密码",
+  "connectionLimit": 5,
+  "encryptionKey": "填写 node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\" 生成的64位字符串"
+}

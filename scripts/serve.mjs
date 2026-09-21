@@ -10,14 +10,22 @@ import {readProjects,writeProjects,changeProjects,publicProjects,analyzeProject}
 import {runServerLogs} from './server-logs.mjs';
 import {workspaceKey,publicSources,changeSources,readSources,writeSources} from './log-sources.mjs';
 
+import {openDatabase} from './database.mjs';
+import {readMysqlStore,writeMysqlStore} from './mysql-store.mjs';
+import {mysqlApi,bodyJson,insertReport} from './mysql-api.mjs';
 await loadEnv();
+const database=await openDatabase();
+const persistent=database?mysqlApi(database):null;
+const saveSources=(file,value)=>database?writeMysqlStore(database,'sources',value):writeSources(file,value);
+const saveProjects=(file,value)=>database?writeMysqlStore(database,'projects',value):writeProjects(file,value);
+const saveModels=(file,value)=>database?writeMysqlStore(database,'models',value):writeStore(file,value);
 const sourcesFile=process.env.LOG_SOURCES_FILE||fileURLToPath(new URL('../data/log-sources.json',import.meta.url));
-let sourceStore=await readSources(sourcesFile),sourcesBusy=false;
+let sourceStore=database?await readMysqlStore(database,'sources'):await readSources(sourcesFile),sourcesBusy=false;
 const projectsFile=process.env.PROJECTS_FILE||fileURLToPath(new URL('../data/projects.json',import.meta.url));
-let projectStore=await readProjects(projectsFile),projectBusy=false;
+let projectStore=database?await readMysqlStore(database,'projects'):await readProjects(projectsFile),projectBusy=false;
 const knownHostsFile=path.join(path.dirname(sourcesFile),'ssh','known_hosts');
 const configFile=process.env.AI_CONFIG_FILE||fileURLToPath(new URL('../data/ai-config.json',import.meta.url));
-let modelStore=await readStore(configFile,config());
+let modelStore=database?await readMysqlStore(database,'models'):await readStore(configFile,config());
 let aiConfig=activeConfig(modelStore);
 let configBusy=false;
 let active=0;
@@ -30,6 +38,36 @@ const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8'
 const server=http.createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Referrer-Policy','no-referrer');
+  const pathname=new URL(req.url,'http://localhost').pathname;
+  if(pathname==='/api/storage'&&req.method==='GET'){json(res,200,{driver:database?'mysql':'local'});return;}
+  if(database&&pathname.startsWith('/api/')){
+    try{
+      if(!isLocalConfigRequest(req,port)){json(res,403,{message:'接口仅限本机访问'});return;}
+      if(!['GET','HEAD'].includes(req.method)&&(req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json'))){json(res,403,{message:'请通过本机页面提交 JSON 请求'});return;}
+      if(pathname.startsWith('/api/auth/')){
+        const allowed={'/api/auth/session':'GET','/api/auth/login':'POST','/api/auth/logout':'POST'};
+        if(allowed[pathname]!==req.method){json(res,405,{message:'请求方式不支持'});return;}
+        json(res,200,await persistent.auth(req,res,pathname,req.method==='POST'?await bodyJson(req,4096):null));return;
+      }
+      const actor=await persistent.user(req);
+      if(!actor){json(res,401,{message:'请先登录，或登录会话已过期'});return;}
+      if(pathname==='/api/import/browser'||pathname==='/api/workspaces'||pathname==='/api/workspaces/delete'||pathname.startsWith('/api/data/')){
+        if(pathname==='/api/workspaces/delete'&&(projectBusy||sourcesBusy||active)){json(res,409,{message:'请等待排查或配置操作完成后归档空间'});return;}
+        const input=['GET','HEAD'].includes(req.method)?null:await bodyJson(req);
+        const scope=new URL(req.url,'http://localhost').searchParams.get('workspace')||input?.workspace;
+        if(pathname==='/api/workspaces/delete')projectBusy=sourcesBusy=true;
+        try{
+          const result=await persistent.handle(pathname,req.method,input,scope,actor);
+          if(pathname==='/api/workspaces/delete'){
+            sourceStore={...sourceStore,sources:sourceStore.sources.filter(s=>s.workspace!==scope)};
+            projectStore={...projectStore,projects:projectStore.projects.filter(p=>p.workspace!==scope)};
+          }
+          json(res,200,result);
+        }finally{if(pathname==='/api/workspaces/delete')projectBusy=sourcesBusy=false}
+        return;
+      }
+    }catch(e){json(res,e.status||500,{message:e.status?e.message:e.code==='ER_DUP_ENTRY'?'名称已存在，请修改后重试':'数据库操作失败，请检查连接和结构；未完成的事务已回滚'});return;}
+  }
   if(req.url==='/api/investigations/stream'){
     if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
     if(!isLocalConfigRequest(req,port)||req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请从本机页面发起排查'});return;}
@@ -43,7 +81,9 @@ const server=http.createServer(async(req,res)=>{
       let input;try{input=JSON.parse(Buffer.concat(chunks).toString());workspaceKey(input?.workspace)}catch{json(res,400,{message:'排查请求格式无效'});return;}
       res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'});res.flushHeaders();
       const report=await investigate(input,sourceStore.sources,aiConfig,emit,{signal:controller.signal,knownHostsFile});
-      controller.signal.throwIfAborted();emit('done',{report});res.end();
+      controller.signal.throwIfAborted();
+      if(database)try{await database.transaction(async conn=>{const [[w]]=await conn.execute('SELECT id FROM workspaces WHERE id=? AND deleted_at IS NULL FOR UPDATE',[input.workspace]);if(!w)throw Error();await insertReport(conn,report,input.workspace)})}catch{throw Error('排查完成但数据库保存失败，请检查连接后重试')}
+      emit('done',{report});res.end();
     }catch(e){if(!res.destroyed){if(res.headersSent){emit('error',{message:e.message});res.end()}else json(res,500,{message:e.message})}}
     finally{active--;res.off('close',disconnect)}return;
   }
@@ -57,9 +97,9 @@ const server=http.createServer(async(req,res)=>{
       let workspace;try{workspace=workspaceKey(JSON.parse(Buffer.concat(chunks).toString()).workspace)}catch{json(res,400,{message:'工作空间标识无效'});return;}
       // Commit each store before updating memory. Retrying finishes a partially completed cleanup.
       const sources={...sourceStore,sources:sourceStore.sources.filter(s=>s.workspace!==workspace)};
-      await writeSources(sourcesFile,sources);sourceStore=sources;
+      await saveSources(sourcesFile,sources);sourceStore=sources;
       const projects={...projectStore,projects:projectStore.projects.filter(p=>p.workspace!==workspace)};
-      await writeProjects(projectsFile,projects);projectStore=projects;
+      await saveProjects(projectsFile,projects);projectStore=projects;
       json(res,200,{deleted:true});
     }catch{json(res,500,{message:'空间清理未完成，部分配置可能已删除。空间入口保留，请重试以完成清理'})}
     finally{projectBusy=sourcesBusy=false;}return;
@@ -80,7 +120,7 @@ const server=http.createServer(async(req,res)=>{
       let input;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'));workspaceKey(input?.workspace)}catch{json(res,400,{message:'项目请求格式无效'});return;}
       if(['save','delete'].includes(input.action)){
         let next;try{next=changeProjects(projectStore,input)}catch(e){json(res,400,{message:e.message});return;}
-        await writeProjects(projectsFile,next);projectStore=next;json(res,200,{projects:publicProjects(projectStore,input.workspace)});return;
+        await saveProjects(projectsFile,next);projectStore=next;json(res,200,{projects:publicProjects(projectStore,input.workspace)});return;
       }
       if(input.action!=='analyze'){json(res,400,{message:'不支持的项目操作'});return;}
       const project=projectStore.projects.find(p=>p.id===input.id&&p.workspace===input.workspace);
@@ -93,7 +133,7 @@ const server=http.createServer(async(req,res)=>{
       const analysis=await analyzeProject(project,requestConfig,input.markdown,emit,{signal:controller.signal});controller.signal.throwIfAborted();
       emit('stage',{phase:'saving',message:'业务链路分析完成，正在保存到工作空间'});
       const next={...projectStore,projects:projectStore.projects.map(p=>p.id===project.id?{...p,analysis,analysisStale:false}:p)};
-      await writeProjects(projectsFile,next);projectStore=next;
+      await saveProjects(projectsFile,next);projectStore=next;
       emit('done',{projects:publicProjects(projectStore,input.workspace),projectId:project.id});res.end();
     }catch(e){
       const message=e.code?'项目操作或本机保存失败，原有分析结果保留':e.message||'项目分析失败，原有结果保留';
@@ -122,12 +162,12 @@ const server=http.createServer(async(req,res)=>{
         if(controller.signal.aborted)return;
         const lastCheck={ok:!error&&result?.ok!==false,checkedAt:result?.checkedAt||new Date().toISOString(),message:error?.message||result?.message||'SSH 登录与日志读取检查通过'};
         const checkedStore={...sourceStore,sources:sourceStore.sources.map(s=>s.id===source.id?{...s,lastCheck}:s)};
-        let saveWarning='';try{await writeSources(sourcesFile,checkedStore);sourceStore=checkedStore}catch{saveWarning='检查状态未保存到本机文件，请检查目录权限'}
+        let saveWarning='';try{await saveSources(sourcesFile,checkedStore);sourceStore=checkedStore}catch{saveWarning='检查状态未保存，请检查当前存储连接与权限'}
         if(error){json(res,502,{message:error.message,saveWarning,sources:publicSources(sourceStore,input.workspace)});return;}
         json(res,200,{sources:publicSources(sourceStore,input.workspace),result,saveWarning});return;
       }
       try{next=changeSources(sourceStore,input)}catch(e){json(res,400,{message:e.message});return;}
-      try{await writeSources(sourcesFile,next);sourceStore=next;json(res,200,{sources:publicSources(sourceStore,input.workspace)});}catch{json(res,500,{message:'服务器配置未保存，请检查本机 data 目录权限；原配置保留'})}
+      try{await saveSources(sourcesFile,next);sourceStore=next;json(res,200,{sources:publicSources(sourceStore,input.workspace)});}catch{json(res,500,{message:'服务器配置未保存，请检查存储连接与权限；原配置保留'})}
     }catch{if(!res.headersSent)json(res,400,{message:'保存请求未完成'})}finally{sourcesBusy=false}return;
   }
   if(req.url==='/api/ai/status'&&req.method==='GET'){json(res,200,status(aiConfig));return;}
@@ -159,8 +199,8 @@ const server=http.createServer(async(req,res)=>{
         try{await analyze(next,{report:{question:'这是连接测试，无交易和日志证据，请简短回答已连接，不做交易判断。',evidence:[]},markdown:''});json(res,200,{message:'连接成功，模型已返回有效文本。测试未修改配置。',model:next.model});}
         catch(e){json(res,502,{message:e.message});}
       }else{
-        try{await writeStore(configFile,next);modelStore=next;aiConfig=activeConfig(modelStore);json(res,200,req.url==='/api/ai/config'?publicConfig(aiConfig):publicStore(modelStore));}
-        catch{json(res,500,{message:'本地文件保存失败，原配置仍有效，请检查 data 目录权限'});}
+        try{await saveModels(configFile,next);modelStore=next;aiConfig=activeConfig(modelStore);json(res,200,req.url==='/api/ai/config'?publicConfig(aiConfig):publicStore(modelStore));}
+        catch{json(res,500,{message:'配置保存失败，原配置仍有效，请检查存储连接与权限'});}
       }
     }catch{if(!res.headersSent)json(res,400,{message:'配置请求未完成，请重试'});}finally{configBusy=false;}
     return;
@@ -205,3 +245,5 @@ const server=http.createServer(async(req,res)=>{
 });
 server.on('error',error=>{console.error(error.code==='EADDRINUSE'?`Port ${port} is in use. Try PORT=${port+1} npm start.`:error.message);process.exit(1)});
 server.listen(port,'127.0.0.1',()=>console.log(`PayTrace: http://127.0.0.1:${port}`));
+
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{server.close(async()=>{await database?.close();process.exit(0)})});

@@ -19,23 +19,24 @@
   $('#add-workspace').onclick=()=>openWorkspace();$('#edit-workspace').onclick=()=>openWorkspace(true);
   $('#workspace-form').addEventListener('submit',async e=>{
     e.preventDefault();if(busy||window.workspaceMutation){$('#workspace-feedback').textContent='请等待当前操作完成';return;}
+    window.workspaceMutation=true;
     try{
       const input={name:$('#workspace-name').value,description:$('#workspace-description').value,businesses:$('#workspace-businesses').value};
-      const w=editingWorkspace?window.workspaceData.update(editingWorkspace,input):window.workspaceData.create(input);
-      refreshPicker();window.refreshWorkspaceActions();$('#workspace-dialog').close();await switchWorkspace(w.id,'settings');
-    }catch(error){$('#workspace-feedback').textContent=error.message}
+      const w=editingWorkspace?await window.workspaceData.update(editingWorkspace,input):await window.workspaceData.create(input);
+      refreshPicker();window.refreshWorkspaceActions();$('#workspace-dialog').close();window.workspaceMutation=false;await switchWorkspace(w.id,'settings');
+    }catch(error){$('#workspace-feedback').textContent=error.message}finally{window.workspaceMutation=false}
   });
   $('#delete-workspace').onclick=async()=>{
     if(busy||saving||window.workspaceMutation||window.projectOperationBusy?.()||modelBusy){toast('请等待当前操作完成后删除空间');return;}
     const scope=workspaceId;
     if(window.workspaceCatalog.length<=1){toast('至少保留一个工作空间，请先新建空间');return;}
-    if(!confirm('删除工作空间“'+activeWorkspace.name+'”？将删除其本机服务器配置（含密码）、项目及分析结果，以及当前浏览器的文档和排查记录。共用模型配置保留；不删除远程日志或 Git 仓库。此操作无法撤销。'))return;
+    if(!confirm(window.storageDriver==='mysql'?'删除工作空间“'+activeWorkspace.name+'”？该空间及其文档、服务器配置、项目和排查记录将归档隐藏。共用模型保留，页面暂不支持恢复。':'删除工作空间“'+activeWorkspace.name+'”？将删除其本机服务器配置（含密码）、项目及分析结果，以及当前浏览器的文档和排查记录。共用模型配置保留；不删除远程日志或 Git 仓库。此操作无法撤销。'))return;
     window.workspaceMutation=true;$('#delete-workspace').disabled=true;aiJob?.controller.abort();
     try{
       if(location.protocol==='file:')throw Error('请通过 npm start 启动的本机页面删除，以同步清理服务器配置');
       const response=await fetch('/api/workspaces/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workspace:scope}),signal:AbortSignal.timeout(15000)});
       const data=await response.json();if(!response.ok)throw Error(data.message||'空间清理失败');
-      window.workspaceData.remove(scope);refreshPicker();window.workspaceMutation=false;
+      await window.workspaceData.remove(scope);refreshPicker();window.workspaceMutation=false;
       await switchWorkspace(window.workspaceCatalog[0].id,'settings');toast('工作空间及关联数据已删除');
     }catch(error){toast((error.name==='TimeoutError'?'请求超时，服务器清理状态待核对，请重试':error.message)+'；未完成时保留空间入口')}
     finally{window.workspaceMutation=false;window.refreshWorkspaceActions()}
@@ -47,7 +48,7 @@
     if(!response.ok){if(data.sources&&scope===workspaceId){sources=data.sources;render()}throw Error((data.message||'数据源请求失败')+(data.saveWarning?'；'+data.saveWarning:''));}return full?data:data.sources;
   }
   function render(){
-    $('#remote-source-list').innerHTML=sources.length?sources.map(s=>`<article class="remote-source-card"><div class="provider-heading"><div><h3>${esc(s.name)}</h3><p>${s.logs?s.logs.length+' 条日志规则':esc(s.service)} · ${esc(s.environment)}</p></div><span class="tag ${s.enabled&&s.lastCheck?.ok?'':'amber'}">${s.enabled?'已启用':'已停用'} · ${esc(s.connectionStatus)}</span></div><dl><div><dt>SSH 服务器</dt><dd>${esc(s.host)}:${s.port}</dd></div><div><dt>登录账号</dt><dd>${esc(s.username)} · 密码已保存</dd></div><div><dt>日志路径</dt><dd>${(s.logs||[{logPath:s.logPath}]).map(r=>esc(r.logPath)).join('<br>')}${!s.logPath.startsWith('/')&&!s.logPath.startsWith('~/')?'<br>相对目录：'+esc(s.logDirectory||'SSH 账号主目录'):''}</dd></div></dl><p class="source-check-status">${s.lastCheck?esc(new Date(s.lastCheck.checkedAt).toLocaleString('zh-CN'))+' · '+esc(s.lastCheck.message):'尚未测试连接'}</p><div class="model-actions"><button type="button" class="text-button" data-source-action="test" data-id="${esc(s.id)}" ${!s.enabled?'disabled':''}>测试连接</button><button type="button" class="primary" data-source-action="search" data-id="${esc(s.id)}" ${!s.enabled?'disabled':''}>查询日志</button><button type="button" class="text-button" data-source-action="toggle" data-id="${esc(s.id)}">${s.enabled?'停用':'启用'}</button><button type="button" class="text-button" data-source-action="edit" data-id="${esc(s.id)}">编辑配置</button><button type="button" class="text-button danger-action" data-source-action="delete" data-id="${esc(s.id)}">删除</button></div></article>`).join(''):'<div class="workspace-empty"><h3>还没有服务器日志数据源</h3><p>点击“添加数据源”，填写服务器地址、SSH 账号和日志路径。</p></div>';
+    $('#remote-source-list').innerHTML=sources.length?sources.map(s=>`<article class="remote-source-card"><div class="provider-heading"><div><h3>${esc(s.name)}</h3><p>${s.logs?s.logs.length+' 条日志规则':esc(s.service)} · ${esc(s.environment)}</p></div><span class="tag ${s.enabled&&s.lastCheck?.ok?'':'amber'}">${s.enabled?'已启用':'已停用'} · ${esc(s.connectionStatus)}</span></div><dl><div><dt>SSH 服务器</dt><dd>${esc(s.host)}:${s.port}</dd></div><div><dt>登录账号</dt><dd>${esc(s.username)} · 密码已保存</dd></div><div><dt>日志路径</dt><dd>${(s.logs||[{logPath:s.logPath}]).map(r=>esc(r.logPath)).join('<br>')}${!s.logPath.startsWith('/')&&!s.logPath.startsWith('~/')?'<br>相对目录：'+esc(s.logDirectory||'SSH 账号主目录'):''}</dd></div></dl><p class="source-check-status">${s.lastCheck?esc(new Date(s.lastCheck.checkedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}))+' · '+esc(s.lastCheck.message):'尚未测试连接'}</p><div class="model-actions"><button type="button" class="text-button" data-source-action="test" data-id="${esc(s.id)}" ${!s.enabled?'disabled':''}>测试连接</button><button type="button" class="primary" data-source-action="search" data-id="${esc(s.id)}" ${!s.enabled?'disabled':''}>查询日志</button><button type="button" class="text-button" data-source-action="toggle" data-id="${esc(s.id)}">${s.enabled?'停用':'启用'}</button><button type="button" class="text-button" data-source-action="edit" data-id="${esc(s.id)}">编辑配置</button><button type="button" class="text-button danger-action" data-source-action="delete" data-id="${esc(s.id)}">删除</button></div></article>`).join(''):'<div class="workspace-empty"><h3>还没有服务器日志数据源</h3><p>点击“添加数据源”，填写服务器地址、SSH 账号和日志路径。</p></div>';
   }
   window.loadLogSources=async()=>{
     const scope=workspaceId,version=++loadVersion;loadedScope='';sources=[];$('#add-log-source').disabled=true;$('#remote-source-list').replaceChildren();$('#source-feedback').textContent='正在读取服务器配置…';

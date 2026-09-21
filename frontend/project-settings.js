@@ -3,7 +3,7 @@
   window.projectOperationBusy=()=>mutating||!!job;
   const field=name=>document.getElementById('managed-project-'+name);
   const status=text=>$('#project-operation-status').textContent=text;
-  const date=value=>new Date(value).toLocaleString('zh-CN');
+  const date=value=>new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'});
   async function request(body,scope=workspaceId,signal){
     if(location.protocol==='file:')throw Error('项目配置需要运行 npm start，通过本机页面访问');
     const response=await fetch('/api/projects'+(!body?'?workspace='+encodeURIComponent(scope):''),{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,signal:signal||AbortSignal.timeout(12000)});
