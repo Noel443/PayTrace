@@ -40,6 +40,16 @@ test('JSON fallback is explicitly reported and never given an artificial stream'
   const result=await analyzeStream(compatible,input,(kind,data)=>events.push({kind,data}),{fetcher:async()=>response(JSON.stringify({choices:[{message:{content:'整段分析'}}]}),'application/json')});
   assert.equal(result.text,'整段分析');assert(events.some(e=>e.data.message?.includes('完整响应')));assert.equal(events.filter(e=>e.kind==='delta').length,1);
 });
+test('provider errors explain the cause without exposing upstream details across response formats',async()=>{
+  for(const [code,expected] of [['context_length_exceeded',/上下文上限/],['insufficient_quota',/额度/],['invalid_api_key',/认证/],['model_not_found',/模型不存在/],['unsupported_parameter',/请求参数/],['server_error',/内部错误/],['unknown',/未提供可识别/]]){
+    const payload={error:{code,message:'private upstream detail test-secret'}};
+    for(const [c,body,type] of [[compatible,event(payload),'text/event-stream'],[compatible,JSON.stringify(payload),'application/json'],[config({AI_PROVIDER:'ollama',AI_MODEL:'local'}),JSON.stringify(payload)+'\n','application/x-ndjson']]){
+      await assert.rejects(analyzeStream(c,input,()=>{},{fetcher:async()=>response(body,type)}),error=>{
+        assert.match(error.message,expected);assert(!error.message.includes('private upstream'));assert(!error.message.includes('test-secret'));return true;
+      });
+    }
+  }
+});
 test('abort cancels upstream and does not complete',async()=>{
   const controller=new AbortController();
   const promise=analyzeStream(compatible,input,()=>{},{signal:controller.signal,fetcher:async(url,options)=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true}))});

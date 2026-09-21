@@ -78,6 +78,18 @@ export async function analyzeStream(c,input,emit,{fetcher=fetch,signal}={}){
   return modelTextStream(c,messages,emit,{fetcher,signal});
 }
 
+// Classify upstream errors without returning arbitrary provider text or credentials.
+function modelServiceError(error){
+  const detail=typeof error==='string'?error:JSON.stringify(error??{});
+  if(/context_length_exceeded|maximum context|context window|too many tokens/i.test(detail))return Error('模型输入超过上下文上限，请缩短业务文档或减少日志后重试');
+  if(/insufficient_quota|quota_exceeded|insufficient.balance|rate_limit|\b429\b/i.test(detail))return Error('模型服务限流或额度不足，请稍后重试或检查账户额度');
+  if(/invalid_api_key|authentication_error|permission_denied|\b401\b|\b403\b/i.test(detail))return Error('模型认证或权限失败，请检查 API Key 和模型权限');
+  if(/model_not_found|model.*does not exist/i.test(detail))return Error('模型不存在或当前账号无权使用，请核对模型名和访问权限');
+  if(/unsupported_parameter|invalid_parameter|invalid_request_error|unsupported.*stream/i.test(detail))return Error('模型服务拒绝请求参数，请检查模型是否支持 Chat Completions 流式输出及输出长度参数');
+  if(/server_error|internal_error|overloaded|\b50[0234]\b/i.test(detail))return Error('模型服务内部错误或暂时不可用，请稍后重试或切换模型服务商');
+  return Error('模型接口返回错误，未提供可识别的错误类型；请在模型服务商处检查请求记录，或测试连接后重试');
+}
+
 export async function modelTextStream(c,messages,emit,{fetcher=fetch,signal,maxTokens=1800}={}){
   if(!c.enabled)throw Error('请先在模型服务商中启用有效的 AI 连接');
   const ollama=c.provider==='ollama';
@@ -107,6 +119,7 @@ export async function modelTextStream(c,messages,emit,{fetcher=fetch,signal,maxT
     if(response.headers.get('content-type')?.includes('application/json')&&!ollama){
       emit('stage',{phase:'receiving',message:'服务商返回完整响应，本次以整段分析显示'});
       const data=await response.json();
+      if(data.error)throw modelServiceError(data.error);
       if(data.choices?.[0]?.finish_reason==='length')throw Error('模型输出达到长度上限，分析未完成');
       append(data.choices?.[0]?.message?.content);finished=true;
     }else{
@@ -114,7 +127,7 @@ export async function modelTextStream(c,messages,emit,{fetcher=fetch,signal,maxT
       await globalThis.PayTraceStream.readEvents(response,ollama?'ndjson':'sse',({data})=>{
         if(data.trim()==='[DONE]'){finished=true;return false;}
         let chunk;try{chunk=JSON.parse(data)}catch{throw Error('模型流式响应格式无效');}
-        if(chunk.error)throw Error('模型生成中断，请检查模型服务后重试');
+        if(chunk.error)throw modelServiceError(chunk.error);
         if(ollama){
           if(chunk.message?.content!==undefined)append(chunk.message.content);
           if(chunk.done){if(chunk.done_reason==='length')throw Error('模型输出达到长度上限，分析未完成');finished=true;return false;}
@@ -123,6 +136,7 @@ export async function modelTextStream(c,messages,emit,{fetcher=fetch,signal,maxT
           // Only public answer text; never expose reasoning_content or provider thinking fields.
           if(choice?.delta?.content!=null)append(choice.delta.content);
           if(choice?.finish_reason){
+            if(choice.finish_reason==='length')throw Error('模型输出达到长度上限，分析未完成');
             if(choice.finish_reason!=='stop')throw Error('模型未正常完成分析，请调整模型或输出限制后重试');
             finished=true;return false;
           }
