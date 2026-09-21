@@ -1,0 +1,39 @@
+frontend/style.css
+  s_fda788cc152a87::t_29a0eed37ae7d8 577-580
+  s_fda788cc152a87::t_9cb5d89034f056 565-576
+AGENT.md
+  s_6cc3ede6eee463::t_e395047a133796 1-23,44-70,73-88
+  s_6cc3ede6eee463::t_d40407ba78aa7d 24-43,71-72
+frontend/app.js
+  s_fda788cc152a87::t_2b444a4fdd8372 15-16,32
+frontend/index.html
+  s_fda788cc152a87::t_2b444a4fdd8372 13,16
+scripts/projects.mjs
+  s_fda788cc152a87::t_2b444a4fdd8372 104
+frontend/project-settings.js
+  s_fda788cc152a87::t_2b444a4fdd8372 27,29,32,34-51,130,134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "fef76fee3d780564bced85c8257b73b6cc661d02",
+  "prompts": {},
+  "sessions": {
+    "s_6cc3ede6eee463": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c214-0099-7900-8073-a97c4724fdcb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    },
+    "s_fda788cc152a87": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c1f4-7493-7013-8509-3acb2a2b6c65",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
