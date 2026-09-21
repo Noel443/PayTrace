@@ -1,0 +1,30 @@
+scripts/ai.mjs
+  s_e7d1bb90e63034::t_db5997793b0f1e 81-92,122,130,139
+scripts/serve.mjs
+  s_e7d1bb90e63034::t_db5997793b0f1e 224
+scripts/stream.test.mjs
+  s_e7d1bb90e63034::t_6c97e64aaad2f5 43-52
+README.md
+  s_e7d1bb90e63034::t_6c97e64aaad2f5 155,193-195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f254eeaf68142100ddd99fb3cf9e4984d7ec78fb",
+  "prompts": {},
+  "humans": {
+    "h_a10a4d78dc54be": {
+      "author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_e7d1bb90e63034": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c321-480e-7852-83b9-4dde7152429b",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
