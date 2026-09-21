@@ -24,14 +24,31 @@
     $('#managed-project-list').innerHTML=projects.length?projects.map(p=>`<article class="remote-source-card"><div class="provider-heading"><div><h3>${esc(p.name)}</h3><p>${p.scanEnabled?(p.repoType==='remote'?'远程 Git 仓库':'本地 Git 仓库'):'Markdown 业务文档'}</p></div><span class="tag ${!p.analysis||p.analysisStale?'amber':''}">${p.analysisStale?'配置已更新 · 待重分析':p.analysis?'链路已保存':'待分析'}</span></div><dl><div><dt>${p.scanEnabled?'仓库 / 分支':'知识来源'}</dt><dd>${p.scanEnabled?esc(p.repoType==='remote'?p.remoteUrl:p.repoPath)+'<br>'+esc(p.branch):'当前工作空间已保存的 Markdown'}</dd></div>${p.focus?`<div><dt>分析重点</dt><dd>${esc(p.focus)}</dd></div>`:''}</dl><p class="source-check-status">${p.analysis?esc(date(p.analysis.analyzedAt))+' · '+esc(p.analysis.model)+' · '+p.analysis.chains.length+' 条业务链路':'保存配置后，点击下方按钮开始分析。'}</p><div class="model-actions"><button type="button" class="primary" data-project-action="analyze" data-id="${esc(p.id)}">AI 分析并保存</button><button type="button" class="text-button" data-project-action="edit" data-id="${esc(p.id)}">编辑配置</button><button type="button" class="text-button danger-action" data-project-action="delete" data-id="${esc(p.id)}">删除</button>${p.analysis?`<button type="button" class="text-button" data-project-action="overview" data-id="${esc(p.id)}">查看业务链路</button>`:''}</div></article>`).join(''):'<div class="workspace-empty"><h3>配置项目，建立业务链路</h3><p>添加项目后，可使用 Markdown 或指定分支的代码分析；结果会保存到当前空间概览。</p></div>';
     controls();
   }
+  let overviewRows=[],overviewScope='',detailProject=null,detailScope='',selectedChain=0,selectedNode=0,returnView='workbench';
   function overview(rows){
+    overviewRows=rows;overviewScope=workspaceId;
     const target=$('#project-overview-results');if(!target)return;
     const analyzed=rows.filter(p=>p.analysis);
-    target.innerHTML=analyzed.length?`<div class="section-heading project-overview-heading"><h3>项目业务链路</h3><span class="tag">${analyzed.length} 个项目 · 已保存</span></div>`+analyzed.map(p=>{
-      const a=p.analysis;
-      return `<article class="project-analysis-card" id="project-result-${esc(p.id)}"><div class="provider-heading"><h3>${esc(p.name)}</h3><span class="tag ${p.analysisStale?'amber':''}">${p.analysisStale?'配置变更，展示上次结果':'AI 静态分析'}</span></div><p class="project-summary">${esc(a.summary)}</p><div class="business-chips">${a.businesses.map(b=>`<span>${esc(b)}</span>`).join('')}</div>${a.chains.map(c=>`<section class="project-chain"><h4>${esc(c.name)}</h4><ol class="project-chain-steps">${c.steps.map(s=>`<li><span class="project-step-service">${esc(s.service)}</span><strong>${esc(s.label)}</strong><p>${esc(s.description)}</p><div class="project-step-citations">${s.evidenceIds.map(id=>`<button type="button" class="text-button" data-project-citation="${esc(id)}" data-project="${esc(p.id)}" title="查看分析依据">[${esc(id)}]</button>`).join('')}</div></li>`).join('')}</ol></section>`).join('')}<p class="project-analysis-meta">${esc(a.model)} · ${esc(date(a.analyzedAt))} · ${a.mode==='repository'?'分支 '+esc(a.branch)+' / commit '+esc(a.commit.slice(0,10)):'Markdown 文档快照'} · 已读取 ${a.coverage.read} / ${a.coverage.total} 份候选资料${a.coverage.truncated?'（部分采样）':''}</p><details class="project-sources"><summary>分析依据与待确认事项</summary>${a.remoteUrl||a.repoPath?'<p>分析时的仓库：'+esc(a.remoteUrl||a.repoPath)+'</p>':''}<p>以下为静态业务理解，需结合实际日志核实执行情况。更新文档或代码后，请重新分析。</p><ul>${a.sources.map(s=>`<li id="project-source-${esc(p.id)}-${esc(s.id)}"><b>[${esc(s.id)}]</b> ${esc(s.file)} · L${s.startLine}–${s.endLine}${s.truncated?' · 片段截断':''}</li>`).join('')}</ul>${a.uncertainties.length?'<h4>待确认事项</h4><ul>'+a.uncertainties.map(u=>'<li>'+esc(u)+'</li>').join('')+'</ul>':''}</details></article>`;
-    }).join(''):rows.length?'<p class="project-overview-empty">已配置 '+rows.length+' 个项目，等待 AI 分析。<button type="button" class="text-button" data-project-settings>前往项目配置</button></p>':'';
+    target.innerHTML=analyzed.length?`<div class="section-heading project-overview-heading"><h3>项目业务链路</h3><span class="tag">${analyzed.length} 个项目</span></div><div class="project-summary-list">`+analyzed.map(p=>`<article class="project-summary-row"><div><h3>${esc(p.name)}</h3><p>${esc(p.analysis.summary.split(/[。！？\n]/)[0])}</p>${p.analysisStale?'<small>配置已更新，当前为上次分析结果</small>':''}</div><button class="text-button" type="button" data-project-open="${esc(p.id)}">查看业务链路 ↗</button></article>`).join('')+'</div>':rows.length?'<p class="project-overview-empty">项目尚未分析。<button type="button" class="text-button" data-project-settings>前往项目配置</button></p>':'';
   }
+  function openDetail(project,origin='workbench'){
+    if(!project?.analysis)return;
+    detailProject=project;detailScope=workspaceId;selectedChain=0;selectedNode=0;returnView=origin;
+    renderDetail();view('project-detail');$('#project-detail-title').focus();window.scrollTo({top:0});
+  }
+  function renderDetail(){
+    const p=detailProject;if(!p||detailScope!==workspaceId){$('#project-detail').replaceChildren();return;}
+    const a=p.analysis,chain=a.chains[selectedChain],node=chain?.steps[selectedNode];
+    $('#project-detail').innerHTML=`<button class="text-button detail-back" type="button" data-detail-back>← ${returnView==='settings'?'返回项目配置':'返回交易排查'}</button><div class="detail-heading"><div><p class="detail-eyebrow">${esc(activeWorkspace.name)} / 项目业务链路</p><h1 id="project-detail-title" tabindex="-1">${esc(p.name)}</h1><p>按业务分类浏览，选择节点查看职责与依据。</p></div><span class="tag ${p.analysisStale?'amber':''}">${p.analysisStale?'配置变更 · 待重新分析':'AI 静态分析'}</span></div><div class="detail-layout"><nav class="detail-categories" aria-label="业务分类"><h2>业务分类</h2>${a.chains.map((c,i)=>`<button type="button" data-detail-chain="${i}" aria-current="${i===selectedChain?'true':'false'}"><span>${esc(c.name)}</span><small>${c.steps.length} 个节点</small></button>`).join('')}</nav><section class="detail-canvas" aria-label="业务节点"><div class="detail-canvas-heading"><p class="detail-eyebrow">业务视图</p><h2>${esc(chain?.name||'暂无业务节点')}</h2><p>按功能分组展示，节点排列不表示调用顺序。</p></div><div class="detail-nodes">${(chain?.steps||[]).map((s,i)=>`<button class="detail-node" type="button" data-detail-node="${i}" aria-pressed="${i===selectedNode}"><span class="detail-node-icon" aria-hidden="true">◇</span><span><small>${esc(s.service)}</small><strong>${esc(s.label)}</strong></span><span class="detail-node-open" aria-hidden="true">↗</span></button>`).join('')}</div><p class="detail-footnote">当前分析仅包含节点引用，缺少明确的节点间调用证据，因此不绘制顺序箭头。</p></section><aside class="detail-inspector" aria-label="节点详情"><p class="detail-eyebrow">节点详情</p><h2>${esc(node?.label||'选择一个节点')}</h2>${node?`<span class="tag">${esc(node.service)}</span><h3>业务职责</h3><p>${esc(node.description)}</p><h3>代码与文档依据</h3>${node.evidenceIds.map(id=>{const source=a.sources.find(s=>s.id===id);return source?`<article class="detail-citation"><b>[${esc(id)}]</b><code>${esc(source.file)}</code><small>第 ${source.startLine}–${source.endLine} 行${source.truncated?' · 片段截断':''}</small></article>`:`<p>[${esc(id)}] 引用资料缺失</p>`}).join('')}<p class="detail-footnote">引用定位到本次读取的文件片段，不代表该节点在实际交易中已执行。</p>`:''}</aside></div><details class="detail-context"><summary>项目概述、分析范围与待确认事项</summary><p>${esc(a.summary)}</p><p>${esc(a.model)} · ${esc(date(a.analyzedAt))} · ${a.mode==='repository'?'分支 '+esc(a.branch)+' / commit '+esc(a.commit):'Markdown 文档快照'}</p><p>${esc(a.remoteUrl||a.repoPath||'')} · 已读取 ${a.coverage.read} / ${a.coverage.total} 份候选资料${a.coverage.truncated?'（部分采样）':''}</p>${a.uncertainties.length?'<h3>待确认事项</h3><ul>'+a.uncertainties.map(u=>'<li>'+esc(u)+'</li>').join('')+'</ul>':'<p>静态分析结果需结合运行日志核实。</p>'}</details>`;
+  }
+  $('#project-detail').addEventListener('click',e=>{
+    if(e.target.closest('[data-detail-back]')){view(returnView);return;}
+    if(detailScope!==workspaceId)return;
+    const chain=e.target.closest('[data-detail-chain]'),node=e.target.closest('[data-detail-node]');
+    if(chain){selectedChain=Number(chain.dataset.detailChain);selectedNode=0;renderDetail();$('#project-detail [data-detail-chain="'+selectedChain+'"]').focus();}
+    if(node){selectedNode=Number(node.dataset.detailNode);renderDetail();$('#project-detail [data-detail-node="'+selectedNode+'"]').focus();}
+  });
+  window.clearProjectDetail=()=>{detailProject=null;detailScope='';overviewRows=[];overviewScope='';$('#project-detail').replaceChildren();};
   window.loadProjectSettings=async()=>{
     const scope=workspaceId,version=++loadVersion;loadedScope='';projects=[];render();
     if(!job)status('正在读取项目配置…');
@@ -110,13 +127,11 @@
     }
     if(b.dataset.projectAction==='edit')open(p);
     if(b.dataset.projectAction==='analyze')analyze(p);
-    if(b.dataset.projectAction==='overview'){view('workbench');document.getElementById('project-result-'+p.id)?.scrollIntoView({behavior:'smooth',block:'start'})}
+    if(b.dataset.projectAction==='overview')openDetail(p,'settings');
   });
   $('#workspace-overview').addEventListener('click',e=>{
     if(e.target.closest('[data-project-settings]')){view('settings');$('#project-settings').scrollIntoView({behavior:'smooth'})}
-    const b=e.target.closest('[data-project-citation]');if(!b)return;
-    const source=document.getElementById('project-source-'+b.dataset.project+'-'+b.dataset.projectCitation);if(!source)return;
-    source.closest('details').open=true;source.scrollIntoView({behavior:'smooth',block:'center'});source.animate([{background:'#dfeaff'},{background:'transparent'}],{duration:1800});
+    const b=e.target.closest('[data-project-open]');if(b&&overviewScope===workspaceId)openDetail(overviewRows.find(p=>p.id===b.dataset.projectOpen));
   });
   $('#import-legacy-projects').onclick=async()=>{
     if(mutating||job||window.workspaceMutation||loadedScope!==workspaceId)return;
