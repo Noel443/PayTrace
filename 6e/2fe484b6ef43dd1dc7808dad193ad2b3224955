@@ -1,0 +1,53 @@
+scripts/real-investigation.test.mjs
+  s_fda788cc152a87::t_e1b5c644dcd075 1-30
+README.md
+  s_fda788cc152a87::t_3c7a5efb39f362 172-174
+  s_fda788cc152a87::t_7d780329a030fb 169-171
+scripts/workspaces.test.mjs
+  s_fda788cc152a87::t_7d780329a030fb 18,155-162
+  s_fda788cc152a87::t_51d15a2f1cd5b1 163
+scripts/server-logs.mjs
+  s_fda788cc152a87::t_37325a2a1c7d9f 1-32
+scripts/ssh-logs.mjs
+  s_fda788cc152a87::t_37325a2a1c7d9f 9-13
+frontend/index.html
+  s_fda788cc152a87::t_e7f47f3403a188 47
+scripts/log-sources.mjs
+  s_fda788cc152a87::t_37325a2a1c7d9f 12-23,37
+frontend/workspace-settings.js
+  s_fda788cc152a87::t_e7f47f3403a188 45,50,61-68,73,80,94,100,106,111
+frontend/app.js
+  s_fda788cc152a87::t_7c7644576e7b01 34-35,37-64,66-70
+  s_fda788cc152a87::t_e7f47f3403a188 65
+scripts/server-logs.test.mjs
+  s_fda788cc152a87::t_20ab9f5680a562 1-46
+frontend/local-api.js
+  s_fda788cc152a87::t_7d780329a030fb 3
+  s_fda788cc152a87::t_7c7644576e7b01 38
+scripts/serve.mjs
+  s_fda788cc152a87::t_5794a28af7155e 2,33-49
+  s_fda788cc152a87::t_37325a2a1c7d9f 10,120,123
+  s_fda788cc152a87::t_3c7a5efb39f362 113,144
+frontend/style.css
+  s_fda788cc152a87::t_e7f47f3403a188 561-562
+  s_fda788cc152a87::t_3c7a5efb39f362 563-564
+scripts/real-investigation.mjs
+  s_fda788cc152a87::t_5794a28af7155e 1-2,4-5,7-17,21,23-26,28,31-43
+  s_fda788cc152a87::t_37325a2a1c7d9f 3,6,18-20,22,27,29-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6e2fe484b6ef43dd1dc7808dad193ad2b3224955",
+  "prompts": {},
+  "sessions": {
+    "s_fda788cc152a87": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c1f4-7493-7013-8509-3acb2a2b6c65",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
