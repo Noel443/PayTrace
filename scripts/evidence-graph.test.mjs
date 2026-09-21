@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 function setup(){
   const storage=new Map(),ctx=vm.createContext({window:{},structuredClone,localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)}});
-  for(const file of ['workspaces','investigation','mock-api','evidence-graph'])vm.runInContext(readFileSync(new URL('../frontend/'+file+'.js',import.meta.url),'utf8'),ctx);
+  for(const file of ['workspaces','investigation','mock-api','evidence-graph'])vm.runInContext(readFileSync(new URL('../'+(['workspaces','mock-api'].includes(file)?'scripts/fixtures':'frontend')+'/'+file+'.js',import.meta.url),'utf8'),ctx);
   return {api:ctx.window.demoApi,graph:ctx.PayTraceGraph};
 }
 test('all nine cases map every exact evidence once and preserve unknown pipeline nodes',async()=>{
