@@ -15,7 +15,7 @@ test('all workspaces start empty and cannot generate synthetic reports',async()=
     for(const path of ['/transactions','/services','/investigations'])assert.equal((await api(path,'GET',undefined,workspace)).length,0);
     assert.equal((await api('/knowledge','GET',undefined,workspace)).markdown,'');
     assert.equal(context.window.workspaceData.get(workspace).cases.length,0);
-    await assert.rejects(api('/investigations','POST',{transactionId:'T202609200001'},workspace),/尚未接入/);
+    await assert.rejects(api('/investigations','POST',{transactionId:'T202609200001'},workspace),/排查报告格式无效/);
   }
 });
 test('reload removes demo history while retaining real records, documents and workspace metadata',async()=>{
@@ -151,4 +151,13 @@ test('bulk report deletion is atomic, validates all IDs and isolates workspaces'
   assert.equal((await api('/investigations','GET',undefined,'hk-cb')).length,1);
   fail();await assert.rejects(api('/investigations','DELETE',{ids:[other.id]},'hk-cb'),/未保存/);
   assert.equal((await api('/investigations','GET',undefined,'hk-cb')).length,1);
+});
+
+test('real investigation reports persist and remain scoped even for former sample identifiers',async()=>{
+  const {api,load}=setup();
+  const report={kind:'real',workspaceId:'card',id:'server-report',transaction:{id:'T202609200001'},evidence:[],ai:{status:'completed',text:'真实日志分析'}};
+  await api('/investigations','POST',report,'card');load();
+  assert.equal((await api('/investigations','GET',undefined,'card'))[0].ai.text,'真实日志分析');
+  assert.equal((await api('/investigations','GET',undefined,'cross-border')).length,0);
+  await assert.rejects(api('/investigations','POST',report,'cross-border'),/格式无效/);
 });

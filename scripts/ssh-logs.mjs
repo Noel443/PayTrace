@@ -6,6 +6,11 @@ export function shellQuote(value){return "'"+String(value).replace(/'/g,"'\\''")
 export function logCommand(source,action,query=''){
   // 展开主目录时仅使用远端 HOME；路径其余部分始终作为字面量引用。
   const homePath=value=>value==='~'?'"$HOME"':value.startsWith('~/')?'"$HOME"/'+shellQuote(value.slice(2)):shellQuote(value);
+  if(action==='discover'){
+    if(!/^[a-zA-Z0-9_.*?-]+$/.test(source.logPath))throw Error('文件筛选规则无效');
+    const directory=homePath(source.logDirectory||'~');
+    return `cd -- ${directory} || exit 41; find . -maxdepth 1 -type f -name ${shellQuote(source.logPath)} -print`;
+  }
   const logPath=source.logPath;
   const base=source.logDirectory?homePath(source.logDirectory):'"$HOME"';
   const resolved=logPath.startsWith('/')||logPath.startsWith('~/')?homePath(logPath):base+'/'+shellQuote(logPath);

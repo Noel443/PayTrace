@@ -558,3 +558,7 @@ html[data-auth-required]:not([data-authenticated]) body { visibility: hidden; }
 .history-pagination { justify-content: flex-end; }
 .history-pagination select { padding: 8px; border: 1px solid var(--line); border-radius: 3px; background: white; }
 .history-table input[type="checkbox"] { width: 16px; height: 16px; margin: 0; cursor: pointer; }
+
+.source-log-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:12px;align-items:end;margin:12px 0;padding:14px;background:#f6f8fb;border:1px solid #dde3ec;border-radius:6px}.source-log-row label{min-width:0}.source-log-row button{margin-bottom:6px}@media(max-width:640px){.source-log-row{grid-template-columns:1fr}.source-log-row button{justify-self:end}}
+
+#source-form>.model-actions{position:sticky;bottom:0;background:#fff;padding:14px 0;border-top:1px solid #dde3ec;z-index:1}

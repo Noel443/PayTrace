@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {investigate} from './real-investigation.mjs';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
@@ -6,7 +7,7 @@ import {loadEnv,config,status,analyze,analyzeStream} from './ai.mjs';
 import {publicConfig,candidate,readStore,writeStore,activeConfig,publicStore,changeStore,isLocalConfigRequest} from './model-config.mjs';
 
 import {readProjects,writeProjects,changeProjects,publicProjects,analyzeProject} from './projects.mjs';
-import {runSsh} from './ssh-logs.mjs';
+import {runServerLogs} from './server-logs.mjs';
 import {workspaceKey,publicSources,changeSources,readSources,writeSources} from './log-sources.mjs';
 
 await loadEnv();
@@ -29,6 +30,23 @@ const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8'
 const server=http.createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Referrer-Policy','no-referrer');
+  if(req.url==='/api/investigations/stream'){
+    if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
+    if(!isLocalConfigRequest(req,port)||req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请从本机页面发起排查'});return;}
+    const now=Date.now();while(attempts.length&&attempts[0]<now-60000)attempts.shift();
+    if(active>=2||attempts.length>=10){json(res,429,{message:'排查请求过于频繁，请稍后重试'});return;}
+    active++;attempts.push(now);
+    const controller=new AbortController(),disconnect=()=>{if(!res.writableEnded)controller.abort()};res.on('close',disconnect);
+    const emit=(event,data)=>{if(!res.destroyed&&!res.writableEnded)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
+    try{
+      const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>450000){json(res,413,{message:'排查请求过大'});return;}chunks.push(chunk)}
+      let input;try{input=JSON.parse(Buffer.concat(chunks).toString());workspaceKey(input?.workspace)}catch{json(res,400,{message:'排查请求格式无效'});return;}
+      res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'});res.flushHeaders();
+      const report=await investigate(input,sourceStore.sources,aiConfig,emit,{signal:controller.signal,knownHostsFile});
+      controller.signal.throwIfAborted();emit('done',{report});res.end();
+    }catch(e){if(!res.destroyed){if(res.headersSent){emit('error',{message:e.message});res.end()}else json(res,500,{message:e.message})}}
+    finally{active--;res.off('close',disconnect)}return;
+  }
   if(req.url==='/api/workspaces/delete'){
     if(!isLocalConfigRequest(req,port)||req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请通过本机页面删除工作空间'});return;}
     if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
@@ -92,17 +110,17 @@ const server=http.createServer(async(req,res)=>{
     if(sourcesBusy){json(res,429,{message:'正在执行数据源操作，请稍后重试'});return;}
     sourcesBusy=true;
     try{
-      const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>16384){json(res,413,{message:'配置过大'});return;}chunks.push(chunk)}
+      const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>65536){json(res,413,{message:'配置过大'});return;}chunks.push(chunk)}
       let input,next;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'));workspaceKey(input?.workspace)}catch(e){json(res,400,{message:e instanceof SyntaxError?'配置 JSON 无效':e.message});return;}
       if(['test','search'].includes(input.action)){
         const source=sourceStore.sources.find(s=>s.id===input.id&&s.workspace===input.workspace);
         if(!source){json(res,404,{message:'当前工作空间未找到该数据源'});return;}
         const controller=new AbortController(),disconnect=()=>{if(!res.writableEnded)controller.abort()};res.on('close',disconnect);
         let result,error;
-        try{result=await runSsh(source,{action:input.action,query:input.query,knownHostsFile,signal:controller.signal})}catch(e){error=e}
+        try{result=await runServerLogs(source,{action:input.action,query:input.query,knownHostsFile,signal:controller.signal})}catch(e){error=e}
         finally{res.off('close',disconnect)}
         if(controller.signal.aborted)return;
-        const lastCheck={ok:!error,checkedAt:result?.checkedAt||new Date().toISOString(),message:error?.message||'SSH 登录与日志读取检查通过'};
+        const lastCheck={ok:!error&&result?.ok!==false,checkedAt:result?.checkedAt||new Date().toISOString(),message:error?.message||result?.message||'SSH 登录与日志读取检查通过'};
         const checkedStore={...sourceStore,sources:sourceStore.sources.map(s=>s.id===source.id?{...s,lastCheck}:s)};
         let saveWarning='';try{await writeSources(sourcesFile,checkedStore);sourceStore=checkedStore}catch{saveWarning='检查状态未保存到本机文件，请检查目录权限'}
         if(error){json(res,502,{message:error.message,saveWarning,sources:publicSources(sourceStore,input.workspace)});return;}
@@ -123,7 +141,7 @@ const server=http.createServer(async(req,res)=>{
     configBusy=true;
     try{
       const chunks=[];let size=0;
-      for await(const chunk of req){size+=chunk.length;if(size>16384){json(res,413,{message:'配置内容过大'});return;}chunks.push(chunk);}
+      for await(const chunk of req){size+=chunk.length;if(size>65536){json(res,413,{message:'配置内容过大'});return;}chunks.push(chunk);}
       let input;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'))}catch{json(res,400,{message:'配置格式无效'});return;}
       let next;
       try{
