@@ -1,11 +1,12 @@
 import http from 'node:http';
+import {parsePublicOrigins,requestAccess} from './request-access.mjs';
 import {followup} from './followup.mjs';
 import {investigate} from './real-investigation.mjs';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {loadEnv,config,status,analyze,analyzeStream} from './ai.mjs';
-import {publicConfig,candidate,readStore,writeStore,activeConfig,publicStore,changeStore,isLocalConfigRequest} from './model-config.mjs';
+import {publicConfig,candidate,readStore,writeStore,activeConfig,publicStore,changeStore} from './model-config.mjs';
 
 import {readProjects,writeProjects,changeProjects,publicProjects,analyzeProject} from './projects.mjs';
 import {runServerLogs} from './server-logs.mjs';
@@ -15,6 +16,7 @@ import {openDatabase} from './database.mjs';
 import {readMysqlStore,writeMysqlStore} from './mysql-store.mjs';
 import {mysqlApi,bodyJson,insertReport} from './mysql-api.mjs';
 await loadEnv();
+const publicOrigins=parsePublicOrigins(process.env.PUBLIC_ORIGINS);
 const database=await openDatabase();
 const persistent=database?mysqlApi(database):null;
 const saveSources=(file,value)=>database?writeMysqlStore(database,'sources',value):writeSources(file,value);
@@ -35,16 +37,18 @@ function json(res,code,data){res.writeHead(code,{'Content-Type':'application/jso
 
 const root=fileURLToPath(new URL('../frontend/',import.meta.url));
 const port=Number(process.env.PORT||19527);
+const access=requestAccess({port,publicOrigins,authenticated:!!database});
 const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 const server=http.createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Referrer-Policy','no-referrer');
   const pathname=new URL(req.url,'http://localhost').pathname;
+  if(pathname.startsWith('/api/')&&!access.allowed(req)){json(res,403,{message:'访问域名未获允许，请检查 PUBLIC_ORIGINS 配置'});return;}
   if(pathname==='/api/storage'&&req.method==='GET'){json(res,200,{driver:database?'mysql':'local'});return;}
   if(database&&pathname.startsWith('/api/')){
     try{
-      if(!isLocalConfigRequest(req,port)){json(res,403,{message:'接口仅限本机访问'});return;}
-      if(!['GET','HEAD'].includes(req.method)&&(req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json'))){json(res,403,{message:'请通过本机页面提交 JSON 请求'});return;}
+      if(!access.allowed(req)){json(res,403,{message:'访问域名未获允许'});return;}
+      if(!['GET','HEAD'].includes(req.method)&&(!access.sameOrigin(req)||!req.headers['content-type']?.startsWith('application/json'))){json(res,403,{message:'请通过同源页面提交 JSON 请求'});return;}
       if(pathname.startsWith('/api/auth/')){
         const allowed={'/api/auth/session':'GET','/api/auth/login':'POST','/api/auth/logout':'POST'};
         if(allowed[pathname]!==req.method){json(res,405,{message:'请求方式不支持'});return;}
@@ -71,7 +75,7 @@ const server=http.createServer(async(req,res)=>{
   }
   if(pathname==='/api/investigations/followup/stream'){
     if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
-    if(!isLocalConfigRequest(req,port)||req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请从本机页面发起追问'});return;}
+    if(!access.allowed(req)||!access.sameOrigin(req)||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请从同源页面发起追问'});return;}
     const now=Date.now();while(attempts.length&&attempts[0]<now-60000)attempts.shift();
     if(active>=2||attempts.length>=10){json(res,429,{message:'追问请求过于频繁，请稍后重试'});return;}
     active++;attempts.push(now);
@@ -95,7 +99,7 @@ const server=http.createServer(async(req,res)=>{
   }
   if(req.url==='/api/investigations/stream'){
     if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
-    if(!isLocalConfigRequest(req,port)||req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请从本机页面发起排查'});return;}
+    if(!access.allowed(req)||!access.sameOrigin(req)||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请从同源页面发起排查'});return;}
     const now=Date.now();while(attempts.length&&attempts[0]<now-60000)attempts.shift();
     if(active>=2||attempts.length>=10){json(res,429,{message:'排查请求过于频繁，请稍后重试'});return;}
     active++;attempts.push(now);
@@ -113,7 +117,7 @@ const server=http.createServer(async(req,res)=>{
     finally{active--;res.off('close',disconnect)}return;
   }
   if(req.url==='/api/workspaces/delete'){
-    if(!isLocalConfigRequest(req,port)||req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请通过本机页面删除工作空间'});return;}
+    if(!access.allowed(req)||!access.sameOrigin(req)||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请通过同源页面删除工作空间'});return;}
     if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
     if(projectBusy||sourcesBusy){json(res,409,{message:'项目或数据源操作尚未结束，请完成后重试删除'});return;}
     projectBusy=sourcesBusy=true;
@@ -130,12 +134,12 @@ const server=http.createServer(async(req,res)=>{
     finally{projectBusy=sourcesBusy=false;}return;
   }
   if(req.url?.split('?')[0]==='/api/projects'){
-    if(!isLocalConfigRequest(req,port)){json(res,403,{message:'项目配置与分析仅限本机页面访问'});return;}
+    if(!access.allowed(req)){json(res,403,{message:'项目配置与分析仅限允许的页面访问'});return;}
     if(req.method==='GET'){
       try{const workspace=workspaceKey(new URL(req.url,'http://localhost').searchParams.get('workspace'));json(res,200,{projects:publicProjects(projectStore,workspace)})}catch(e){json(res,400,{message:e.message})}return;
     }
     if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
-    if(req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请从本机页面操作项目'});return;}
+    if(!access.sameOrigin(req)||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请从同源页面操作项目'});return;}
     if(projectBusy){json(res,429,{message:'正在保存或分析项目，请等待当前操作完成'});return;}
     projectBusy=true;const controller=new AbortController();const disconnect=()=>{if(!res.writableEnded)controller.abort()};res.on('close',disconnect);
     const emit=(event,data)=>{if(!res.destroyed&&!res.writableEnded)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
@@ -166,12 +170,12 @@ const server=http.createServer(async(req,res)=>{
     }finally{res.off('close',disconnect);projectBusy=false;if(counted)active--;}return;
   }
   if(req.url?.split('?')[0]==='/api/log-sources'){
-    if(!isLocalConfigRequest(req,port)){json(res,403,{message:'服务器配置仅限本机页面访问'});return;}
+    if(!access.allowed(req)){json(res,403,{message:'服务器配置仅限允许的页面访问'});return;}
     if(req.method==='GET'){
       try{const scope=workspaceKey(new URL(req.url,'http://localhost').searchParams.get('workspace'));json(res,200,{sources:publicSources(sourceStore,scope)});}catch(e){json(res,400,{message:e.message})}return;
     }
     if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
-    if(req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请通过本机页面保存服务器配置'});return;}
+    if(!access.sameOrigin(req)||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请通过同源页面保存服务器配置'});return;}
     if(sourcesBusy){json(res,429,{message:'正在执行数据源操作，请稍后重试'});return;}
     sourcesBusy=true;
     try{
@@ -197,11 +201,11 @@ const server=http.createServer(async(req,res)=>{
   }
   if(req.url==='/api/ai/status'&&req.method==='GET'){json(res,200,status(aiConfig));return;}
   if(['/api/ai/config','/api/ai/test','/api/ai/providers'].includes(req.url)){
-    if(!isLocalConfigRequest(req,port)){json(res,403,{message:'模型配置仅限本机 localhost 或 127.0.0.1 页面访问'});return;}
+    if(!access.allowed(req)){json(res,403,{message:'模型配置仅限允许的页面访问'});return;}
     if(req.url==='/api/ai/providers'&&req.method==='GET'){json(res,200,publicStore(modelStore));return;}
     if(req.url==='/api/ai/config'&&req.method==='GET'){json(res,200,publicConfig(aiConfig));return;}
     if(!((req.url==='/api/ai/config'&&req.method==='PUT')||(['/api/ai/test','/api/ai/providers'].includes(req.url)&&req.method==='POST'))){json(res,405,{message:'请求方式不支持'});return;}
-    if(req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请通过本机页面提交配置'});return;}
+    if(!access.sameOrigin(req)||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请通过同源页面提交配置'});return;}
     if(configBusy){json(res,429,{message:'正在保存或测试模型，请稍后重试'});return;}
     configBusy=true;
     try{
@@ -231,8 +235,7 @@ const server=http.createServer(async(req,res)=>{
     return;
   }
   if(['/api/ai/analyze','/api/ai/analyze/stream'].includes(req.url)&&req.method==='POST'){
-    const origin=req.headers.origin;
-    if(!origin||![`http://${req.headers.host}`,`https://${req.headers.host}`].includes(origin)){json(res,403,{message:'仅允许同源页面调用'});return;}
+    if(!access.sameOrigin(req)){json(res,403,{message:'仅允许同源页面调用'});return;}
     if(!req.headers['content-type']?.startsWith('application/json')){json(res,415,{message:'需要 JSON 请求'});return;}
     const now=Date.now();while(attempts.length&&attempts[0]<now-60000)attempts.shift();
     if(active>=2||attempts.length>=10){json(res,429,{message:'分析请求过于频繁，请稍后重试'});return;}

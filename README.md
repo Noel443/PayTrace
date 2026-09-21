@@ -159,7 +159,7 @@ MySQL 模式将模型配置保存到 `model_providers`，API Key 使用 AES-256-
 
 支持保存多套模型连接，卡片展示当前服务、模型和密钥保存状态，支持编辑、测试及删除备用服务商。所有工作空间共用当前模型，切换只影响后续请求，历史分析保留原模型信息。当前服务商也可删除；删除后 AI 处于未启用状态，需手动启用其他服务商，不自动选择备用连接。原单模型文件自动识别为“默认模型服务”，首次保存时升级为多服务商格式，原有密钥保留。
 
-配置和连接测试仅允许本机 localhost/127.0.0.1 页面访问。本地模式首次运行可复制 `.env.example` 为 `.env` 配置模型，已有 `data/ai-config.json` 优先。MySQL 模式只读取数据库，不自动导入 `.env` 或 `data/`，需先生成并执行迁移 SQL。
+配置和连接测试默认仅允许本机页面；MySQL 模式可通过下方公网白名单开放 NATAPP 访问，仍需登录。本地模式首次运行可复制 `.env.example` 为 `.env` 配置模型，已有 `data/ai-config.json` 优先。MySQL 模式只读取数据库，不自动导入 `.env` 或 `data/`，需先生成并执行迁移 SQL。
 
 兼容接口配置示例（以 DeepSeek 为例，模型名和服务地址以账号可用配置为准）：
 
@@ -211,6 +211,20 @@ npm start
 
 访问 http://127.0.0.1:19527 。`scripts/serve.mjs` 默认监听本机端口 19527，直接运行 `npm start` 即可；设置环境变量或 `.env` 中的 `PORT` 可覆盖默认值。使用 SSH 时还需 ssh 与 sshpass。端口冲突可用 `PORT=19528 npm start`。
 
+
+## NATAPP 内网穿透访问
+
+在项目根目录 `.env` 添加公网来源地址，然后重启 `npm start`：
+
+```dotenv
+PUBLIC_ORIGINS=http://your-domain.natappfree.cc
+```
+
+将地址替换成 NATAPP 当前分配的地址，NATAPP 转发到 `127.0.0.1:19527`，保留原始 Host。用该地址打开页面，登录后即可加载工作空间和使用配置、日志查询、排查及追问。免费域名变化后需更新配置并重启。HTTPS 地址必须以 `https://` 单独配置；多个来源用逗号分隔，不包含末尾斜杠、路径或通配符。启用 HTTPS 时使用 NATAPP 实际提供的 HTTPS 地址。
+
+公网访问要求已经配置 MySQL，因为本地展示登录不提供服务端身份验证；本地模式设置白名单会拒绝启动。对外使用前请通过 `npm run db:password` 修改初始密码，HTTP 隧道不加密登录凭据，处理真实数据建议使用 HTTPS。
+
+`scripts/request-access.mjs` 校验本机转发连接、实际 Host 和精确来源白名单，支持 NATAPP 的代理转发头，但不使用这些头决定放行。`scripts/serve.mjs` 对所有 API 应用访问校验；业务 API 保留 MySQL 会话检查，写操作保留同源 Origin 与 JSON 检查。监听地址仍为 `127.0.0.1`。不配置 `PUBLIC_ORIGINS` 时保持仅本机访问，无数据库结构变更。单元验证运行 `node --test scripts/request-access.test.mjs`，完整回归运行 `npm test`。
 
 ## 工作空间与业务链路
 
