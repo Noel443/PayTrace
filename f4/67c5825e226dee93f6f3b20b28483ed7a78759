@@ -1,0 +1,49 @@
+README.md
+  s_305c0df39c6db4::t_c255426dc013dd 233,269
+  s_305c0df39c6db4::t_4f310565788e83 91,156,229-232
+scripts/mysql.integration.mjs
+  s_305c0df39c6db4::t_e9177618648ce7 41-48
+frontend/bootstrap.js
+  s_305c0df39c6db4::t_b340d38c3c885e 5,7
+scripts/serve.mjs
+  s_305c0df39c6db4::t_b340d38c3c885e 2,72-94
+  s_305c0df39c6db4::t_c280dde78dd601 95
+frontend/followup-ui.js
+  s_305c0df39c6db4::t_01c0c291f6d639 1-8,15-22,24-54,56-63
+  s_305c0df39c6db4::t_c255426dc013dd 9-14,23,55
+frontend/followup-data.js
+  s_305c0df39c6db4::t_767482f9720cd2 1-21
+frontend/app.js
+  s_305c0df39c6db4::t_4f310565788e83 32,67,70
+frontend/style.css
+  s_305c0df39c6db4::t_4f310565788e83 581-588
+scripts/followup.test.mjs
+  s_305c0df39c6db4::t_68d7a4f996fc1e 1-64
+frontend/local-api.js
+  s_305c0df39c6db4::t_b340d38c3c885e 39-43
+scripts/mysql-api.mjs
+  s_305c0df39c6db4::t_b340d38c3c885e 1,100,110-111
+scripts/followup.mjs
+  s_305c0df39c6db4::t_767482f9720cd2 1-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f467c5825e226dee93f6f3b20b28483ed7a78759",
+  "prompts": {},
+  "humans": {
+    "h_a10a4d78dc54be": {
+      "author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_305c0df39c6db4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c313-2c3e-7b60-8b39-d6f80c9b69d9",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
