@@ -1,6 +1,13 @@
 import {readFile} from 'node:fs/promises';
 import '../frontend/stream.js';
 
+export const ANALYSIS_TIMEOUT_MS=300000;
+export function analysisTimeoutSeconds(value=300){
+  const seconds=Number(value);
+  if(!Number.isInteger(seconds)||seconds<30||seconds>3600)throw Error('分析超时请填写 30–3600 秒的整数');
+  return seconds;
+}
+
 export async function loadEnv(file=new URL('../.env',import.meta.url)) {
   let text;
   try { text=await readFile(file,'utf8'); } catch(e) { if(e.code==='ENOENT')return;throw e; }
@@ -21,11 +28,11 @@ export function config(env=process.env) {
   let valid=false;
   try {const url=new URL(base);valid=['http:','https:'].includes(url.protocol)&&!url.username&&!url.password;}catch{}
   const enabled=['compatible','ollama'].includes(provider)&&!!model&&valid&&(provider==='ollama'||!!key);
-  return {provider,model,base,key,enabled};
+  return {provider,model,base,key,enabled,timeoutSeconds:analysisTimeoutSeconds(env.AI_TIMEOUT_SECONDS??300)};
 }
 
 export function status(c) {
-  return {enabled:c.enabled,provider:c.provider==='ollama'?'Ollama':'兼容接口',model:c.model||'未配置',message:c.enabled?'已配置，实际连接以调用结果为准':'请在本机服务配置页面填写并保存模型连接'};
+  return {timeoutSeconds:c.timeoutSeconds??300,enabled:c.enabled,provider:c.provider==='ollama'?'Ollama':'兼容接口',model:c.model||'未配置',message:c.enabled?'已配置，实际连接以调用结果为准':'请在本机服务配置页面填写并保存模型连接'};
 }
 
 const system=`你是支付交易运营排障助手。你收到的是模拟交易数据和用户提供的业务文档。请分析问题，不能声称访问过真实服务器或扫描过仓库。
@@ -42,17 +49,17 @@ function messagesFor(c,input) {
   return [{role:'system',content:system},{role:'user',content:payload}];
 }
 
-export async function analyze(c,input,fetcher=fetch) {
+export async function analyze(c,input,fetcher=fetch,{timeoutMs=analysisTimeoutSeconds(c.timeoutSeconds)*1000}={}) {
   const messages=messagesFor(c,input);
   const ollama=c.provider==='ollama';
   let response;
   try {
     response=await fetcher(c.base+(ollama?'/api/chat':'/chat/completions'),{
-      method:'POST',redirect:'error',signal:AbortSignal.timeout(60000),
+      method:'POST',redirect:'error',signal:AbortSignal.timeout(timeoutMs),
       headers:{'Content-Type':'application/json',...(!ollama?{Authorization:'Bearer '+c.key}:{})},
       body:JSON.stringify({model:c.model,messages,stream:false,...(ollama?{options:{num_predict:1800}}:{max_tokens:1800})})
     });
-  } catch {throw new Error('模型连接失败或超过 60 秒，请检查接口地址、网络和模型服务');}
+  } catch {throw new Error(`模型连接失败或超过 ${timeoutMs/1000} 秒，请检查接口地址、网络和模型服务`);}
   if(!response.ok) {
     if([401,403].includes(response.status))throw new Error('模型认证或权限失败，请检查服务端 API Key 和模型访问权限');
     if(response.status===429)throw new Error('模型服务限流或额度不足，请稍后重试或检查账户额度');
@@ -74,8 +81,9 @@ export async function analyzeStream(c,input,emit,{fetcher=fetch,signal}={}){
 export async function modelTextStream(c,messages,emit,{fetcher=fetch,signal,maxTokens=1800}={}){
   if(!c.enabled)throw Error('请先在模型服务商中启用有效的 AI 连接');
   const ollama=c.provider==='ollama';
-  const timeout=AbortSignal.timeout(60000),requestSignal=signal?AbortSignal.any([signal,timeout]):timeout;
-  emit('stage',{phase:'connecting',message:'正在连接 '+c.model,model:c.model});
+  const timeoutSeconds=analysisTimeoutSeconds(c.timeoutSeconds);
+  const timeout=AbortSignal.timeout(timeoutSeconds*1000),requestSignal=signal?AbortSignal.any([signal,timeout]):timeout;
+  emit('stage',{phase:'connecting',message:'正在连接 '+c.model+'，本次分析最多等待 '+timeoutSeconds+' 秒',model:c.model});
   let response;
   try{
     response=await fetcher(c.base+(ollama?'/api/chat':'/chat/completions'),{
@@ -83,7 +91,7 @@ export async function modelTextStream(c,messages,emit,{fetcher=fetch,signal,maxT
       headers:{'Content-Type':'application/json',...(!ollama?{Authorization:'Bearer '+c.key}:{})},
       body:JSON.stringify({model:c.model,messages,stream:true,...(ollama?{options:{num_predict:maxTokens}}:{max_tokens:maxTokens})})
     });
-  }catch{throw Error(signal?.aborted?'分析已停止':'模型连接失败或超过 60 秒，请检查模型服务');}
+  }catch{throw Error(signal?.aborted?'分析已停止':`模型连接失败或超过 ${timeoutSeconds} 秒，请检查模型服务`);}
   if(!response.ok){
     await response.body?.cancel();
     throw Error([401,403].includes(response.status)?'模型认证或权限失败，请检查 API Key 和模型权限':response.status===429?'模型服务限流或额度不足，请稍后重试':'模型服务返回错误（HTTP '+response.status+'），请核对接口地址与模型名');
@@ -122,7 +130,7 @@ export async function modelTextStream(c,messages,emit,{fetcher=fetch,signal,maxT
       });
     }
   }catch(e){
-    if(requestSignal.aborted)throw Error(signal?.aborted?'分析已停止':'模型分析超过 60 秒，已停止');
+    if(requestSignal.aborted)throw Error(signal?.aborted?'分析已停止':`模型分析超过 ${timeoutSeconds} 秒，已停止`);
     if(e.name==='TypeError')throw Error('模型连接中断，分析未完成，请重试');
     throw e;
   }

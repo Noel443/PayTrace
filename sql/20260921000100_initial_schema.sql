@@ -62,8 +62,7 @@ CREATE TABLE IF NOT EXISTS investigations (
  PRIMARY KEY(workspace_id,id),
  FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
  INDEX idx_report_history(workspace_id,deleted_at,created_at),
- INDEX idx_report_transaction(workspace_id,transaction_id),
- CHECK (feedback_status IS NULL OR feedback_status IN ('已解决','需要开发介入','判断不正确'))
+ INDEX idx_report_transaction(workspace_id,transaction_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='空间排查记录，JSON保留证据快照以兼容报告结构';
 CREATE TABLE IF NOT EXISTS projects (
  id VARCHAR(100) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,

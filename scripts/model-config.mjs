@@ -3,7 +3,7 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {config} from './ai.mjs';
 
-export function publicConfig(c){return {provider:c.provider,base:c.base,model:c.model,hasKey:!!c.key,enabled:c.enabled};}
+export function publicConfig(c){return {provider:c.provider,base:c.base,model:c.model,hasKey:!!c.key,enabled:c.enabled,timeoutSeconds:c.timeoutSeconds??300};}
 export function candidate(input,current={}){
   if(!input||!['compatible','ollama'].includes(input.provider))throw Error('请选择有效的接口类型');
   const base=String(input.base||'').trim().replace(/\/+$/,'');
@@ -14,7 +14,7 @@ export function candidate(input,current={}){
   const same=current.provider===input.provider&&current.base===base;
   const key=input.provider==='ollama'?'':(input.clearKey?'':entered||(same?current.key:''));
   if(input.provider==='compatible'&&!key&&!input.clearKey)throw Error('请输入 API Key；更换接口地址后需重新填写密钥');
-  return config({AI_PROVIDER:input.provider,AI_BASE_URL:base,AI_MODEL:model,AI_API_KEY:key});
+  return config({AI_PROVIDER:input.provider,AI_BASE_URL:base,AI_MODEL:model,AI_API_KEY:key,AI_TIMEOUT_SECONDS:input.timeoutSeconds??current.timeoutSeconds??300});
 }
 export async function readConfig(file,fallback){
   try {const saved=JSON.parse(await readFile(file,'utf8'));return candidate(saved,{provider:'',base:'',key:''});}

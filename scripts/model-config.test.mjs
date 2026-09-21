@@ -89,3 +89,19 @@ test('deleting the last active provider disables AI instead of retaining its cre
   const empty=changeStore(store,{action:'delete',id:store.activeId});
   assert.equal(empty.providers.length,0);assert.equal(empty.activeId,null);assert.equal(activeConfig(empty).enabled,false);
 });
+
+test('analysis timeout defaults, validates, persists and is retained on older-client edits',async()=>{
+  const {changeStore,writeStore,readStore,publicStore}=await import('./model-config.mjs');
+  const dir=await mkdtemp(path.join(os.tmpdir(),'paytrace-timeout-'));
+  try{
+    assert.equal(candidate(original).timeoutSeconds,300);
+    for(const timeoutSeconds of [0,29,3601,60.5,'invalid',''])assert.throws(()=>candidate({...original,timeoutSeconds}),/30–3600/);
+    let store=changeStore({version:2,activeId:null,providers:[]},{...original,action:'save',name:'Slow model',timeoutSeconds:900,activate:true});
+    store=changeStore(store,{...original,id:store.activeId,action:'save',name:'Slow model',key:''});
+    const file=path.join(dir,'config.json');await writeStore(file,store);
+    const restored=await readStore(file,{});
+    assert.equal(restored.providers[0].timeoutSeconds,900);
+    assert.equal(restored.providers[0].key,original.key);
+    assert.equal(publicStore(restored).providers[0].timeoutSeconds,900);
+  }finally{await rm(dir,{recursive:true,force:true})}
+});

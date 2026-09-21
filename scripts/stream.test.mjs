@@ -45,3 +45,31 @@ test('abort cancels upstream and does not complete',async()=>{
   const promise=analyzeStream(compatible,input,()=>{},{signal:controller.signal,fetcher:async(url,options)=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true}))});
   controller.abort();await assert.rejects(promise,/已停止/);
 });
+
+test('complex analysis has a five-minute deadline and reports deadline expiration',async t=>{
+  const deadline=new AbortController();let requestedTimeout;
+  t.mock.method(AbortSignal,'timeout',ms=>{requestedTimeout=ms;return deadline.signal});
+  await assert.rejects(analyzeStream(compatible,input,()=>{},{fetcher:async(url,options)=>{
+    assert.equal(requestedTimeout,300000);
+    const pending=new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true}));
+    deadline.abort(new DOMException('Deadline reached','TimeoutError'));
+    return pending;
+  }}),/超过 300 秒/);
+});
+
+test('non-streaming analysis gets five minutes while connection tests can keep one minute',async t=>{
+  const {analyze}=await import('./ai.mjs');const durations=[];
+  t.mock.method(AbortSignal,'timeout',ms=>{durations.push(ms);return new AbortController().signal});
+  const fetcher=async()=>Response.json({choices:[{message:{content:'有效结果'}}]});
+  await analyze(compatible,input,fetcher);
+  await analyze(compatible,input,fetcher,{timeoutMs:60000});
+  assert.deepEqual(durations,[300000,60000]);
+});
+
+test('streaming analysis enforces the provider-specific saved timeout',async t=>{
+  let duration;const stages=[];
+  t.mock.method(AbortSignal,'timeout',ms=>{duration=ms;return new AbortController().signal});
+  const result=await analyzeStream({...compatible,timeoutSeconds:900},input,(kind,data)=>stages.push(data),{fetcher:async()=>response(event({choices:[{delta:{content:'结果'},finish_reason:'stop'}]}))});
+  assert.equal(duration,900000);assert.equal(result.status,'completed');
+  assert.ok(stages.some(s=>s.message?.includes('900 秒')));
+});

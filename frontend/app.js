@@ -195,7 +195,8 @@ async function runAi(report){
     item.textContent=message;progress.textContent=message;
   };
   stage('preparing','正在整理本次交易证据…');
-  const signal=AbortSignal.any([job.controller.signal,AbortSignal.timeout(65000)]);
+  // The server enforces the selected provider’s saved deadline for every analysis.
+  const signal=job.controller.signal;
   let text='',result=null;const cited=new Set();
   try{
     const knowledge=await api('/knowledge','GET',undefined,reportWorkspace);
@@ -241,7 +242,7 @@ async function runAi(report){
     }
     toast(window.workspaceData.get(reportWorkspace).name+'：AI 分析已完成并保存');
   }catch(error){
-    const message=job.controller.signal.aborted?'分析已停止':signal.aborted?'模型请求超过 65 秒':error.message;
+    const message=job.controller.signal.aborted?'分析已停止':error.message;
     stage('failed',message+' · 本次未保存，原有报告保留');
     live.classList.add('is-incomplete');
     if(live.isConnected){$('#ai-saved-text').hidden=false;$('#ai-result-state').textContent=report.ai.status==='completed'?report.ai.model+' · 本次未完成':'未完成';}
@@ -260,9 +261,10 @@ async function modelRequest(endpoint,method='GET',body){
   if(!response.ok)throw Error(data.message||'模型配置请求失败');return data;
 }
 function renderProviders(){
+  $('#provider-storage-note').textContent=window.storageDriver==='mysql'?'API Key 已保存时会加密存储在数据库，后续自动复用，无需重复填写；编辑时留空保留。':'API Key 保存到服务端本机文件，后续自动复用，无需重复填写；编辑时留空保留。';
   $('#provider-list').innerHTML=modelStore.providers.length?modelStore.providers.map(p=>{
     const active=p.id===modelStore.activeId;
-    return `<article class="provider-card ${active?'is-active':''}"><div class="provider-card-top"><div class="provider-icon" aria-hidden="true">${p.provider==='ollama'?'L':'AI'}</div><div class="provider-title"><h3>${esc(p.name)}</h3><span>${p.provider==='ollama'?'Ollama · 本地模型':'Chat Completions · 兼容接口'}</span></div><span class="provider-badge ${active?'active-badge':''}">${active?(p.enabled?'● 当前使用':'当前服务 · 待完善'):'备用'}</span></div><div class="provider-detail"><strong>${esc(p.model)}</strong><span title="${esc(p.base)}">${esc(p.base)}</span></div><div class="provider-card-bottom"><span class="provider-key">${p.provider==='ollama'?'本地连接 · 无需密钥':p.hasKey?'密钥已保存':'待配置密钥'}</span><div class="provider-buttons"><button type="button" class="text-button" data-model-action="test" data-model-id="${esc(p.id)}" ${!p.enabled?'disabled':''}>测试</button><button type="button" class="text-button" data-model-action="edit" data-model-id="${esc(p.id)}">编辑</button><button type="button" class="text-button delete-model" data-model-action="delete" data-model-id="${esc(p.id)}">删除</button><button type="button" class="${active?'provider-current':'primary'}" data-model-action="activate" data-model-id="${esc(p.id)}" ${active||!p.enabled?'disabled':''}>${active?'已选用':'启用'}</button></div></div></article>`;
+    return `<article class="provider-card ${active?'is-active':''}"><div class="provider-card-top"><div class="provider-icon" aria-hidden="true">${p.provider==='ollama'?'L':'AI'}</div><div class="provider-title"><h3>${esc(p.name)}</h3><span>${p.provider==='ollama'?'Ollama · 本地模型':'Chat Completions · 兼容接口'}</span></div><span class="provider-badge ${active?'active-badge':''}">${active?(p.enabled?'● 当前使用':'当前服务 · 待完善'):'备用'}</span></div><div class="provider-detail"><strong>${esc(p.model)}</strong><span>分析超时：${esc(p.timeoutSeconds??300)} 秒</span><span title="${esc(p.base)}">${esc(p.base)}</span></div><div class="provider-card-bottom"><span class="provider-key">${p.provider==='ollama'?'本地连接 · 无需密钥':p.hasKey?(window.storageDriver==='mysql'?'密钥已加密保存 · 自动复用':'密钥已保存 · 自动复用'):'待配置密钥'}</span><div class="provider-buttons"><button type="button" class="text-button" data-model-action="test" data-model-id="${esc(p.id)}" ${!p.enabled?'disabled':''}>测试</button><button type="button" class="text-button" data-model-action="edit" data-model-id="${esc(p.id)}">编辑</button><button type="button" class="text-button delete-model" data-model-action="delete" data-model-id="${esc(p.id)}">删除</button><button type="button" class="${active?'provider-current':'primary'}" data-model-action="activate" data-model-id="${esc(p.id)}" ${active||!p.enabled?'disabled':''}>${active?'已选用':'启用'}</button></div></div></article>`;
   }).join(''):'<div class="provider-empty"><h3>添加第一个模型服务</h3><p>接入云端兼容接口或本地 Ollama，开始使用 AI 辅助排查。</p><button class="text-button" type="button" data-model-action="add">＋ 添加服务商</button></div>';
 }
 function modelControls(busy){
@@ -281,12 +283,12 @@ function syncModelForm(){
   $('#ai-key-label').hidden=ollama;$('#ai-clear-label').hidden=ollama||!loadedModel?.hasKey;
   $('#ai-address-help').textContent=ollama?'默认地址 http://127.0.0.1:11434，需提前运行 Ollama 并安装模型。':'在根地址后追加 /chat/completions；如需 /v1，请包含在地址中。';
   const same=loadedModel&&loadedModel.provider===$('#ai-provider').value&&loadedModel.base===$('#ai-base').value.trim().replace(/\/+$/,'');
-  $('#ai-key-state').textContent=ollama?'本地 Ollama 无需 API Key。':same&&loadedModel.hasKey?'密钥已保存，留空保留，输入新值可替换。':'请输入 API Key，更换地址后需重新填写。';
+  $('#ai-key-state').textContent=ollama?'本地 Ollama 无需 API Key。':same&&loadedModel.hasKey?'已保存 API Key，后续自动复用，无需再次填写。此处不回显，留空保留，输入新值可替换。':'请输入 API Key，更换地址后需重新填写。';
 }
 async function loadModelConfig(){
   if(modelBusy||window.workspaceMutation)return;
   const version=++modelLoadVersion;$('#provider-list').replaceChildren();
-  $('#add-model').disabled=true;$('#provider-feedback').textContent='正在读取本机配置…';
+  $('#add-model').disabled=true;$('#provider-feedback').textContent='正在读取已保存配置…';
   try{const store=await modelRequest('providers');if(version!==modelLoadVersion||modelBusy)return;modelStore=store;renderProviders();refreshModelStatus();$('#add-model').disabled=false;$('#provider-feedback').textContent=''}
   catch(e){if(version!==modelLoadVersion||modelBusy)return;$('#provider-list').innerHTML='';$('#provider-feedback').textContent=e.message}
 }
@@ -296,6 +298,7 @@ function openModel(id){
   $('#model-form').reset();$('#model-dialog-title').textContent=loadedModel?'编辑服务商':'添加服务商';
   $('#model-presets').hidden=!!loadedModel;
   $('#ai-name').value=loadedModel?.name||'';$('#ai-provider').value=loadedModel?.provider||'compatible';
+  $('#ai-timeout').value=loadedModel?.timeoutSeconds??300;
   $('#ai-base').value=loadedModel?.base||'';$('#ai-model').value=loadedModel?.model||'';
   $('#ai-activate').checked=loadedModel?loadedModel.id===modelStore.activeId:!modelStore.activeId;
   $('#model-feedback').textContent='';syncModelForm();$('#model-dialog').showModal();$('#ai-name').focus();
@@ -315,8 +318,8 @@ $('#ai-clear').addEventListener('change',()=>{if($('#ai-clear').checked)$('#ai-a
 $('#model-form').addEventListener('input',()=>$('#model-feedback').textContent='配置已修改，尚未保存。');
 async function submitModel(test){
   if(modelBusy||!$('#model-form').reportValidity())return;
-  const body={action:'save',id:loadedModel?.id,name:$('#ai-name').value,provider:$('#ai-provider').value,base:$('#ai-base').value,model:$('#ai-model').value,key:$('#ai-key').value,clearKey:$('#ai-clear').checked,activate:$('#ai-activate').checked};
-  modelControls(true);$('#model-feedback').textContent=test?'正在测试连接，最长等待约 60 秒…':'正在保存本机配置…';
+  const body={action:'save',id:loadedModel?.id,name:$('#ai-name').value,provider:$('#ai-provider').value,base:$('#ai-base').value,model:$('#ai-model').value,timeoutSeconds:Number($('#ai-timeout').value),key:$('#ai-key').value,clearKey:$('#ai-clear').checked,activate:$('#ai-activate').checked};
+  modelControls(true);$('#model-feedback').textContent=test?'正在测试连接，最长等待约 60 秒…':'正在保存服务商配置…';
   try{
     const result=await modelRequest(test?'test':'providers','POST',body);
     if(test)$('#model-feedback').textContent=result.message;
@@ -332,7 +335,7 @@ $('#provider-list').addEventListener('click',async e=>{
   if(action==='edit'||action==='add'){openModel(id);return;}
   const entry=modelStore.providers.find(p=>p.id===id);
   if(!entry)return;
-  if(action==='delete'&&!confirm('删除服务商“'+entry.name+'”及其本机密钥？'+(id===modelStore.activeId?'删除当前服务后，AI 将处于未启用状态，需手动启用其他服务。':'')))return;
+  if(action==='delete'&&!confirm('删除服务商“'+entry.name+'”及其已保存密钥？'+(id===modelStore.activeId?'删除当前服务后，AI 将处于未启用状态，需手动启用其他服务。':'')))return;
   modelControls(true);$('#provider-feedback').textContent=action==='test'?'正在测试“'+entry.name+'”，最长等待约 60 秒…':'正在更新配置…';
   try{
     const result=await modelRequest(action==='test'?'test':'providers','POST',action==='test'?{id,savedOnly:true}:{id,action});
