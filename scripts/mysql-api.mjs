@@ -1,3 +1,4 @@
+import '../frontend/followup-data.js';
 import {randomUUID,randomBytes,createHash,scrypt as scryptCallback,timingSafeEqual} from 'node:crypto';
 import {promisify} from 'node:util';
 import {workspaceKey} from './log-sources.mjs';
@@ -96,7 +97,7 @@ export function mysqlApi(db){
         }
         fail('请求方式不支持',405);
       }
-      const match=route.match(/^\/investigations\/([a-zA-Z0-9_-]{1,100})(\/(feedback|ai))?$/);
+      const match=route.match(/^\/investigations\/([a-zA-Z0-9_-]{1,100})(\/(feedback|ai|followups))?$/);
       if(!match)fail('接口不存在',404);
       const [[row]]=await conn.execute('SELECT payload FROM investigations WHERE workspace_id=? AND id=? AND deleted_at IS NULL FOR UPDATE',[scope,match[1]]);if(!row)fail('排查记录不存在',404);
       const report=decode(row.payload);
@@ -106,6 +107,8 @@ export function mysqlApi(db){
       if(match[3]==='feedback'){
         if(!['已解决','需要开发介入','判断不正确'].includes(input?.status)||typeof input.note!=='string'||input.note.length>2000)fail('处理结果或备注格式无效');
         report.feedback={status:input.status,note:input.note,time:new Date().toISOString()};
+      }else if(match[3]==='followups'){
+        try{PayTraceFollowup.append(report,input)}catch(e){fail(e.message,409)}
       }else{
         if(input?.status!=='completed'||typeof input.text!=='string'||input.text.length>30000)fail('AI 结果格式无效');
         if((input.revision??0)!==(report.revision??0))fail('证据已更新，请重新分析',409);report.ai=input;

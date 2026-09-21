@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {followup} from './followup.mjs';
 import {investigate} from './real-investigation.mjs';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
@@ -67,6 +68,30 @@ const server=http.createServer(async(req,res)=>{
         return;
       }
     }catch(e){json(res,e.status||500,{message:e.status?e.message:e.code==='ER_DUP_ENTRY'?'名称已存在，请修改后重试':'数据库操作失败，请检查连接和结构；未完成的事务已回滚'});return;}
+  }
+  if(pathname==='/api/investigations/followup/stream'){
+    if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
+    if(!isLocalConfigRequest(req,port)||req.headers.origin!==`http://${req.headers.host}`||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请从本机页面发起追问'});return;}
+    const now=Date.now();while(attempts.length&&attempts[0]<now-60000)attempts.shift();
+    if(active>=2||attempts.length>=10){json(res,429,{message:'追问请求过于频繁，请稍后重试'});return;}
+    active++;attempts.push(now);
+    const controller=new AbortController(),disconnect=()=>{if(!res.writableEnded)controller.abort()};res.on('close',disconnect);
+    const emit=(event,data)=>{if(!res.destroyed&&!res.writableEnded)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
+    try{
+      const input=await bodyJson(req,1500000),scope=workspaceKey(input.workspace);
+      if(typeof input.reportId!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(input.reportId))throw Error('排查记录标识无效');
+      const report=database?await persistent.handle('/api/data/investigations/'+input.reportId,'GET',null,scope):input.report;
+      if(report?.id!==input.reportId||report.workspaceId!==scope)throw Error('排查报告不属于当前空间');
+      if(database&&((report.followups||[]).length!==input.expectedCount||(report.revision??0)!==(input.revision??0)))throw Error('对话或证据已更新，请重新打开报告后追问');
+      const markdown=database?(await persistent.handle('/api/data/knowledge','GET',null,scope)).markdown:input.markdown;
+      res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'});res.flushHeaders();
+      const turn=await followup(aiConfig,report,input.question,markdown,emit,{signal:controller.signal});
+      const update={turn,expectedCount:input.expectedCount,revision:input.revision};
+      let saved=false,saveError='';
+      if(database){try{await persistent.handle('/api/data/investigations/'+input.reportId+'/followups','POST',update,scope);saved=true}catch{saveError='回答已完成，但保存失败，请点击重试保存；若对话已更新，请先导出并重新打开报告。'}}
+      emit('done',{turn,saved,saveError});res.end();
+    }catch(e){if(!res.destroyed){const message=e.code?'追问服务暂不可用，请重试':e.message;if(res.headersSent){emit('error',{message});res.end()}else json(res,e.status||400,{message})}}
+    finally{active--;res.off('close',disconnect)}return;
   }
   if(req.url==='/api/investigations/stream'){
     if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}

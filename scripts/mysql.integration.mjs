@@ -38,6 +38,14 @@ test('MySQL 8 schema, seed, persistence, transactions, isolation, encryption and
     await api.handle('/api/data/investigations','POST',report,'card',actor);
     assert.equal((await api.handle('/api/data/investigations/report-fixture','GET',null,'card',actor)).feedback.note,'saved');
     await assert.rejects(api.handle('/api/data/investigations/report-fixture','GET',null,'hk-cb',actor),e=>e.status===404);
+    const followupUpdate={turn:{id:'turn-fixture',question:'下一步？',text:'请补齐日志 [E1]',model:'fixture',createdAt:new Date().toISOString()},expectedCount:0,revision:0};
+    await api.handle('/api/data/investigations/report-fixture/followups','POST',followupUpdate,'card',actor);
+    await api.handle('/api/data/investigations/report-fixture/followups','POST',followupUpdate,'card',actor);
+    const withConversation=await api.handle('/api/data/investigations/report-fixture','GET',null,'card',actor);
+    assert.equal(withConversation.followups.length,1);assert.equal(withConversation.feedback.note,'saved');
+    await assert.rejects(api.handle('/api/data/investigations/report-fixture/followups','POST',{...followupUpdate,turn:{...followupUpdate.turn,id:'stale-turn'}},'card',actor),e=>e.status===409);
+    await assert.rejects(api.handle('/api/data/investigations/report-fixture/followups','POST',followupUpdate,'hk-cb',actor),e=>e.status===404);
+
     await assert.rejects(api.handle('/api/data/investigations','DELETE',{ids:['report-fixture','missing']},'card',actor),e=>e.status===409);
     assert.equal((await api.handle('/api/data/investigations','GET',null,'card',actor)).length,1,'partial bulk deletion rolls back');
     await api.handle('/api/data/knowledge','PUT',{scanEnabled:false,projects:[],markdown:''},'card',actor);

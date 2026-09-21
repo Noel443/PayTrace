@@ -578,3 +578,11 @@ html[data-auth-required]:not([data-authenticated]) body { visibility: hidden; }
 .detail-eyebrow{letter-spacing:0}
 .detail-heading h1,.detail-categories button span,.detail-node strong{overflow-wrap:anywhere}
 .detail-node:focus-visible,.detail-categories button:focus-visible{outline:2px solid #315cb2;outline-offset:3px}
+
+.followup-panel{margin:28px 0;padding:24px;border:1px solid var(--line,#dce1e7);border-radius:8px;background:#fafbfd}
+.followup-panel textarea{display:block;width:100%;box-sizing:border-box;margin:10px 0;resize:vertical}
+.followup-turn{padding:18px 0;border-bottom:1px solid var(--line,#dce1e7)}
+.followup-turn:last-child{margin-bottom:20px}
+.followup-question,.followup-panel .ai-text{white-space:pre-wrap;overflow-wrap:anywhere}
+.followup-turn small{display:block;margin-top:12px;color:#737b88}
+@media(max-width:640px){.followup-panel{padding:16px}.followup-panel .section-title{align-items:flex-start;gap:8px;flex-direction:column}}

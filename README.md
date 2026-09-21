@@ -88,7 +88,7 @@ unset paytrace_password
 
 空间外键保证归属，报告按空间与时间、搜索标识建索引；报告的金额等交易信息仍作为证据快照，不建立资金账务表。日志规则和证据形态尚在变化，采用 JSON 保留完整结构，当前没有把每条日志或反馈拆成独立表。模型、项目和 SSH 数据源以实体行为单位保存，不把整个库打包为单个 JSON 文件。所有业务 SQL 参数绑定，动态表名只来自固定白名单。
 
-MySQL 模式新增：`GET /api/workspaces`、`POST /api/workspaces`（新建/编辑）、`POST /api/workspaces/delete`（事务归档）、`/api/data/knowledge`（GET/PUT）、`/api/data/investigations`（GET/POST/DELETE）、`/api/data/investigations/:id`（GET/DELETE）、其 `/feedback` 和 `/ai`（POST），及 `POST /api/import/browser`。空间数据使用 `?workspace=<id>`；旧配置接口保持兼容。`GET /api/storage` 返回当前模式，`/api/auth/login`、`/api/auth/logout` 使用 POST，`/api/auth/session` 使用 GET。除模式检测和登录相关接口外，业务 API 均需登录；写入还校验同源 Origin 和 JSON 内容类型。
+MySQL 模式新增：`GET /api/workspaces`、`POST /api/workspaces`（新建/编辑）、`POST /api/workspaces/delete`（事务归档）、`/api/data/knowledge`（GET/PUT）、`/api/data/investigations`（GET/POST/DELETE）、`/api/data/investigations/:id`（GET/DELETE）、其 `/feedback`、`/ai` 和 `/followups`（POST），及 `POST /api/import/browser`。空间数据使用 `?workspace=<id>`；旧配置接口保持兼容。`GET /api/storage` 返回当前模式，`/api/auth/login`、`/api/auth/logout` 使用 POST，`/api/auth/session` 使用 GET。除模式检测和登录相关接口外，业务 API 均需登录；写入还校验同源 Origin 和 JSON 内容类型。
 
 ## 登录与业务文档
 
@@ -153,7 +153,7 @@ Node 本地服务调用真实模型，支持 SSH 日志排查及项目业务链�
 1. 运行 `npm start`，打开 http://127.0.0.1:5173 。如果此前启动过旧版本，先停止再重新运行。
 2. 进入“服务配置 → 模型服务商”，点击“添加服务商”。可选 DeepSeek、通义千问、Ollama 参考配置，或填写自定义接口。
 3. 填写服务商名称、接口根地址、模型名和 API Key，可先“测试连接”，再保存。勾选“保存后设为当前服务”或点击卡片“启用”即可切换，无需重启。测试不会保存或切换配置。
-4. 完成一次交易排查，点击图谱右上角或“AI 证据分析”中的“AI 分析”。模型使用问题、沙箱交易、匹配日志与已保存的 Markdown，逐步输出分析摘要。
+4. 输入流水号和问题，点击“开始排查”。模型使用本次匹配日志与已保存的 Markdown 生成分析；结果下方的“继续追问”可围绕同一笔交易连续提问。
 
 MySQL 模式将模型配置保存到 `model_providers`，API Key 使用 AES-256-GCM 加密，当前启用模型记录在 `app_settings`；本地模式保存到 `data/ai-config.json`（0600，其中密钥为明文）。页面仅显示是否已有密钥，不回传保存的密钥。留空保留原密钥，更换接口根地址时必须重新填写，可勾选“清除已保存密钥”停用兼容接口。
 
@@ -226,7 +226,11 @@ MySQL 模式中报告由服务器在流式响应完成前保存，刷新或更�
 
 排查记录支持按流水号、商户、问题或结论搜索，按处理状态和 AI 分析状态筛选，并显示当前空间的记录汇总。AI 输出中的有效证据编号（如 `[E1]`）可点击展开对应日志；未匹配的编号只显示文本，不链接到其他证据。
 
-真实报告可查看日志证据与查询覆盖情况、导出 Markdown 并填写处理反馈。
+真实报告可查看日志证据与查询覆盖情况、导出 Markdown 并填写处理反馈。在“继续追问”输入后点击“发送追问”，回答会逐步显示，也可以停止；首次 AI 分析失败仍可追问。追问使用原有日志、原始问题、首次成功分析、当前已保存的业务文档和最近对话，不会重新查询服务器。需要最新日志时使用“重新查询并分析”，生成独立的新报告。没有日志时模型只能说明证据不足。
+
+完整追问随排查记录保存，重新打开可继续，导出 Markdown 包含全部已保存对话及当前未保存的完整回答。失败或停止保留输入和已有对话，未完成的输出不作为后续上下文；完整回答保存失败时显示“重试保存”，保存前不能继续发送。切换页面或退出会停止当前追问。单条问题最多 4000 字符；模型收到最近最多 12 轮、合计最多 60000 字符的完整问答，较早对话保留在报告中，未加入上下文时页面提示。
+
+`POST /api/investigations/followup/stream` 提供追问 SSE，复用模型超时、同源检查、登录校验和调用限流。MySQL 模式从服务端读取所属空间的报告和文档，完成后将问答追加到现有 `investigations.payload.followups` JSON；本地模式通过 `/investigations/:id/followups` 浏览器接口保存。无需新增数据库表、字段或迁移 SQL。追加按证据版本及现有轮数检查冲突，重复保存同一问答 ID 幂等，不覆盖反馈；页面更新回答时保留未提交的反馈草稿。`frontend/followup-data.js` 共享追加校验与上下文裁剪，`frontend/followup-ui.js` 实现交互，`scripts/followup.mjs` 构造模型消息。
 
 Markdown 点击“保存知识配置”后按当前模式保存到数据库或浏览器，页面展示保存位置和时间；保存空文档也是有效操作。可下载 `.md` 备份。当前只保存最新文档，不提供文档版本管理或 OSS。
 
@@ -262,7 +266,7 @@ MYSQL_TEST_CONFIG=config/database.json npm run test:mysql
 
 测试账号须有创建测试数据库和表的权限；建议使用专门的本机 MySQL 测试实例。测试每次新建随机命名的 `paytrace_test_*` 库，只修改该隔离库，重复执行基础 SQL，验证外键、初始化幂等、重启持久化、工作空间隔离、批量删除失败回滚、密文存储、同源校验、登录与退出。时间验证覆盖北京时间存储、Date 读写往返、连接字符集和排序规则、8 小时登录有效期、退出时间，以及旧 UTC 转换脚本重复执行不重复加 8 小时；保留测试库供检查，不自动清理。未传 MYSQL_TEST_CONFIG 时明确跳过，不算数据库验证成功。
 
-75 项普通自动化测试通过；MySQL 8.4.11 隔离库集成测试通过，测试 Node 进程使用 TZ=UTC，确认数据库日期转换不依赖服务器本地时区。实际业务库迁移未自动执行，接入自己的 MySQL 后应先完成备份及上述验证。
+追问回归通过 `node --test scripts/followup.test.mjs` 验证上下文、失败与取消、存储隔离、并发冲突和幂等追加；全量检查使用 `npm test`。已有 MySQL 8.4.11 隔离库集成验证记录，测试 Node 进程使用 TZ=UTC，确认数据库日期转换不依赖服务器本地时区。追问追加的真实数据库集成用例已加入上述脚本；当前配置账号无创建测试库权限，该部分尚未通过真实 MySQL 验证。实际业务库迁移未自动执行，接入自己的 MySQL 后应先完成备份及上述验证。
 
 ## 日志目录与相对路径
 

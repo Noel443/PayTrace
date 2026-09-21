@@ -36,6 +36,11 @@
       const selected=new Set(ids);save('reports',reports.filter(r=>!selected.has(r.id)),workspace);return {deleted:ids.length};
     }
     if(path==='/investigations'){if(method==='POST'){if(body?.kind!=='real'||body.workspaceId!==workspace||!body.id)throw Error('排查报告格式无效');const reports=read('reports',[],workspace);save('reports',[body,...reports.filter(r=>r.id!==body.id)],workspace);return body;}return read('reports',[],workspace);}
+    const followupMatch=path.match(/^\/investigations\/([^/]+)\/followups$/);
+    if(followupMatch&&method==='POST'){
+      const reports=read('reports',[],workspace),report=reports.find(r=>r.id===followupMatch[1]);if(!report)throw Error('排查记录不存在');
+      PayTraceFollowup.append(report,body);save('reports',reports,workspace);return report;
+    }
     const aiMatch=path.match(/^\/investigations\/([^/]+)\/ai$/);
     if(aiMatch&&method==='POST'){
       const reports=read('reports',[],workspace),report=reports.find(r=>r.id===aiMatch[1]);if(!report)throw Error('排查记录不存在');
