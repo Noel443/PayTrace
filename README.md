@@ -148,6 +148,20 @@ MySQL 模式将项目配置及最后一次成功分析保存在 `projects` 表�
 
 ## 接入真实 AI
 
+## 启动测试与生产
+
+启动命令已经区分环境：
+
+```bash
+npm start                 # 测试环境，默认
+npm run start:test        # 测试环境
+npm run start:prod        # 生产环境，只读日志查询与分析
+```
+
+首次配置时复制 `.env.test.example` 为 `.env.test`，复制 `.env.prod.example` 为 `.env.prod`。测试和生产必须使用不同的数据库配置、`encryptionKey`、数据目录和登录域名。生产启动前必须存在 `.env.prod`，否则程序会拒绝启动；测试环境没有 `.env.test` 时会回退读取 `.env`。
+
+生产实例通过 `PAYTRACE_ENV=production` 强制进入只读模式。生产页面不提供配置和删除入口，服务端也会拦截配置修改、删除等写请求。生产日志源中填写堡垒机地址、端口和账号后，SSH 查询通过 `ProxyJump` 到目标服务器；堡垒机认证使用本机 VPN / SSH Agent，不在应用中保存堡垒机密码。
+
 Node 本地服务调用真实模型，支持 SSH 日志排查及项目业务链路分析。无需 Java；真实 AI、SSH 和 MySQL 均需通过 `npm start` 访问。
 
 1. 运行 `npm start`，打开 http://127.0.0.1:19527 。如果此前启动过旧版本，先停止再重新运行。

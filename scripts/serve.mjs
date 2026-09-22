@@ -37,12 +37,21 @@ function json(res,code,data){res.writeHead(code,{'Content-Type':'application/jso
 
 const root=fileURLToPath(new URL('../frontend/',import.meta.url));
 const port=Number(process.env.PORT||19527);
+const runtimeMode=String(process.env.PAYTRACE_ENV||'test').toLowerCase()==='production'?'production':'test';
+const counterpartUrl=String(process.env.PAYTRACE_COUNTERPART_URL||'').trim();
+const productionReadOnly=runtimeMode==='production';
 const access=requestAccess({port,publicOrigins,authenticated:!!database});
 const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 const server=http.createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Referrer-Policy','no-referrer');
   const pathname=new URL(req.url,'http://localhost').pathname;
+  if(pathname==='/api/runtime'&&req.method==='GET'){json(res,200,{environment:runtimeMode,production:productionReadOnly,counterpartUrl});return;}
+  // Production is a deliberately read-only surface. The only writes allowed are
+  // the server-side persistence performed by log investigation/AI analysis.
+  if(productionReadOnly&&pathname.startsWith('/api/')&&!['GET','HEAD'].includes(req.method)&&pathname!=='/api/auth/login'&&pathname!=='/api/auth/logout'&&pathname!=='/api/investigations/stream'&&pathname!=='/api/investigations/followup/stream'){
+    json(res,403,{message:'生产环境仅允许查询日志和分析，禁止修改配置、删除记录或写入其他数据'});return;
+  }
   if(pathname.startsWith('/api/')&&!access.allowed(req)){json(res,403,{message:'访问域名未获允许，请检查 PUBLIC_ORIGINS 配置'});return;}
   if(pathname==='/api/storage'&&req.method==='GET'){json(res,200,{driver:database?'mysql':'local'});return;}
   if(database&&pathname.startsWith('/api/')){

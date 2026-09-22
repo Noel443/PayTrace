@@ -41,7 +41,12 @@ export async function runSsh(source,{action='test',query='',knownHostsFile,signa
   if(signal?.aborted)throw Error('SSH 操作已取消');
   await mkdir(path.dirname(knownHostsFile),{recursive:true,mode:0o700});
   const file=await open(knownHostsFile,'a',0o600);await file.close();
-  const args=['-d','3','ssh','-F','/dev/null','-T','-o','StrictHostKeyChecking=accept-new','-o','UserKnownHostsFile='+knownHostsFile,'-o','GlobalKnownHostsFile=/dev/null','-o','UpdateHostKeys=no','-o','ConnectTimeout=10','-o','ServerAliveInterval=5','-o','ServerAliveCountMax=2','-o','NumberOfPasswordPrompts=1','-o','PreferredAuthentications=password,keyboard-interactive','-o','PubkeyAuthentication=no','-o','LogLevel=ERROR','-p',String(source.port),'-l',source.username,'--',source.host,command];
+  const args=['-d','3','ssh','-F','/dev/null','-T','-o','StrictHostKeyChecking=accept-new','-o','UserKnownHostsFile='+knownHostsFile,'-o','GlobalKnownHostsFile=/dev/null','-o','UpdateHostKeys=no','-o','ConnectTimeout=10','-o','ServerAliveInterval=5','-o','ServerAliveCountMax=2','-o','NumberOfPasswordPrompts=1','-o','PreferredAuthentications=password,keyboard-interactive','-o','PubkeyAuthentication=no','-o','LogLevel=ERROR'];
+  // A production source may be reached through an SSH bastion. Authentication
+  // to the bastion is intentionally delegated to the local SSH agent / control
+  // connection; the app never stores or forwards a second password.
+  if(source.jumpHost){args.push('-J',`${source.jumpUsername}@${source.jumpHost}:${source.jumpPort}`)}
+  args.push('-p',String(source.port),'-l',source.username,'--',source.host,command);
   const started=Date.now();
   return new Promise((resolve,reject)=>{
     let child,finished=false,stdout=[],size=0,stderr='',truncated=false,timer;

@@ -26,6 +26,9 @@ export function sourceCandidate(input,current={}){
   if(!/^[a-zA-Z0-9_.-]+$/.test(service))throw Error('服务标识仅支持字母、数字、点、横线和下划线');
   const port=Number(input.port);if(!Number.isInteger(port)||port<1||port>65535)throw Error('SSH 端口应为 1–65535');
   const logDirectory=str('logDirectory',1000,false);
+  const jumpHost=String(input.jumpHost??'').trim(),jumpUsername=String(input.jumpUsername??'').trim();
+  const jumpPort=input.jumpPort===undefined||input.jumpPort===''?22:Number(input.jumpPort);
+  if(jumpHost){if(!isIP(jumpHost)&&!(/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(jumpHost)))throw Error('堡垒机地址无效');if(!jumpUsername||!/^[a-zA-Z0-9_.@-]{1,100}$/.test(jumpUsername))throw Error('堡垒机账号无效');if(!Number.isInteger(jumpPort)||jumpPort<1||jumpPort>65535)throw Error('堡垒机端口应为 1–65535');}
   if(logDirectory&&!logDirectory.startsWith('/')&&logDirectory!=='~'&&!logDirectory.startsWith('~/'))throw Error('日志目录须为绝对路径或 ~/ 开头的目录');
   if(logPath.startsWith('~')&&!logPath.startsWith('~/'))throw Error('仅支持 ~/ 开头的当前账号主目录路径');
   if(typeof input.enabled!=='boolean')throw Error('请选择是否启用数据源');
@@ -34,7 +37,7 @@ export function sourceCandidate(input,current={}){
   if(entered.length>4096||/[\0\r\n]/.test(entered))throw Error('密码格式无效');
   const password=entered||(same?current.password:'');
   if(!password)throw Error('请输入 SSH 密码；更换服务器、端口或账号后需重新填写');
-  return {workspace,name,service,host,port,username,logPath,logDirectory,environment,password,enabled:input.enabled,...(logs?{logs}:{})};
+  return {workspace,name,service,host,port,username,logPath,logDirectory,environment,password,enabled:input.enabled,...(jumpHost?{jumpHost,jumpPort,jumpUsername}:{}) ,...(logs?{logs}:{})};
 }
 export function publicSources(store,workspace){return store.sources.filter(s=>s.workspace===workspace).map(({password,...s})=>({...s,hasPassword:!!password,connectionStatus:s.lastCheck?.ok?'最近检查通过':s.lastCheck?'最近检查失败':'未检查'}));}
 export function changeSources(store,input){

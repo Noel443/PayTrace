@@ -8,7 +8,7 @@ export function analysisTimeoutSeconds(value=300){
   return seconds;
 }
 
-export async function loadEnv(file=new URL('../.env',import.meta.url)) {
+export async function loadEnv(file=process.env.PAYTRACE_ENV_FILE||new URL('../.env',import.meta.url)) {
   let text;
   try { text=await readFile(file,'utf8'); } catch(e) { if(e.code==='ENOENT')return;throw e; }
   for(const line of text.split(/\r?\n/)) {

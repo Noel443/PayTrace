@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "node scripts/serve.mjs",
+    "start": "node scripts/start.mjs test",
+    "start:test": "node scripts/start.mjs test",
+    "start:prod": "node scripts/start.mjs prod",
     "test": "node --test scripts/*.test.mjs",
     "db:export": "node scripts/export-mysql-seed.mjs",
     "db:password": "node scripts/change-password.mjs",

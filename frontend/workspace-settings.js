@@ -71,6 +71,7 @@
     if(saving||window.workspaceMutation||loadedScope!==workspaceId)return;
     editing=source;sourceScope=workspaceId;$('#source-form').reset();$('#source-dialog-title').textContent=source?'编辑日志数据源':'添加日志数据源';$('#source-workspace').textContent='所属空间：'+activeWorkspace.name;
     for(const name of ['name','service','host','port','username','environment'])if(source)field(name).value=source[name];
+    for(const name of ['jumpHost','jumpPort','jumpUsername'])if(document.getElementById('source-'+name))document.getElementById('source-'+name).value=source?.[name]|| (name==='jumpPort'?22:'');
     field('directory').value=source?.logDirectory||'';$('#source-log-rows').replaceChildren();for(const rule of source?.logs||[{logPath:source?.logPath||'',service:source?.service||''}])addLogRow(rule);field('enabled').checked=source?.enabled??true;field('password').value='';$('#source-form-feedback').textContent='';passwordHint();$('#source-dialog').showModal();
   }
   $('#add-log-source').onclick=()=>open();
@@ -78,7 +79,7 @@
   function setBusy(value){saving=value;$('#log-query-dialog').querySelectorAll('button,input').forEach(el=>el.disabled=value);$('#source-dialog').querySelectorAll('button,input').forEach(el=>el.disabled=value);$('#remote-source-list').querySelectorAll('button').forEach(el=>{const source=sources.find(s=>s.id===el.dataset.id);el.disabled=value||(['test','search'].includes(el.dataset.sourceAction)&&!source?.enabled)})}
   $('#source-form').addEventListener('submit',async e=>{
     e.preventDefault();if(saving)return;
-    const scope=sourceScope,body={action:'save',workspace:scope,id:editing?.id,name:field('name').value,service:field('service').value,host:field('host').value,port:Number(field('port').value),username:field('username').value,password:field('password').value,environment:field('environment').value,logDirectory:field('directory').value,logs:[...document.querySelectorAll('.source-log-row')].map(row=>({logPath:row.querySelector('[data-log-path]').value,service:row.querySelector('[data-log-service]').value})),enabled:field('enabled').checked};
+    const scope=sourceScope,body={action:'save',workspace:scope,id:editing?.id,name:field('name').value,service:field('service').value,host:field('host').value,port:Number(field('port').value),username:field('username').value,password:field('password').value,environment:field('environment').value,logDirectory:field('directory').value,jumpHost:document.getElementById('source-jumpHost')?.value,jumpPort:Number(document.getElementById('source-jumpPort')?.value||22),jumpUsername:document.getElementById('source-jumpUsername')?.value,logs:[...document.querySelectorAll('.source-log-row')].map(row=>({logPath:row.querySelector('[data-log-path]').value,service:row.querySelector('[data-log-service]').value})),enabled:field('enabled').checked};
     setBusy(true);$('#source-form-feedback').textContent='正在保存本机配置…';
     try{const rows=await request('POST',body,scope);if(scope===workspaceId){++loadVersion;sources=rows;render();$('#source-feedback').textContent='数据源已保存到本机，可点击“测试连接”验证 SSH 和日志读取权限。'}$('#source-dialog').close()}
     catch(e){$('#source-form-feedback').textContent=e.name==='TimeoutError'?'请求超时，请刷新核对保存状态后重试':e.message}
