@@ -1,0 +1,49 @@
+frontend/bootstrap.js
+  s_d90bd15399ec64::t_de01dd2f2ba09f 10-13
+  s_d90bd15399ec64::t_3d5673e7185641 3-9,14
+.env.prod.example
+  s_d90bd15399ec64::t_436d222a63fda4 1-12
+.env.test.example
+  s_d90bd15399ec64::t_436d222a63fda4 1-12
+README.md
+  s_d90bd15399ec64::t_436d222a63fda4 151-164
+frontend/workspace-settings.js
+  s_d90bd15399ec64::t_764639941bf6ef 74,82
+frontend/index.html
+  s_d90bd15399ec64::t_95dfba3b698b13 49
+  s_d90bd15399ec64::t_c28e0d32059ff9 6
+scripts/ssh-logs.mjs
+  s_d90bd15399ec64::t_d6f3d64339f895 44-49
+package.json
+  s_d90bd15399ec64::t_4db9ed397270ce 6-8
+scripts/serve.mjs
+  s_d90bd15399ec64::t_e13604a810fcf9 40-42,49-54
+scripts/start.mjs
+  s_d90bd15399ec64::t_063ac2647fe261 1-10,12,16-19
+  s_d90bd15399ec64::t_7e6e09bedf9a1e 11,13-15
+scripts/log-sources.mjs
+  s_d90bd15399ec64::t_10d222396e491a 29-31,40
+scripts/ai.mjs
+  s_d90bd15399ec64::t_7865371138d599 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ef8d173480544eb245f9062b1e19d32301d04890",
+  "prompts": {},
+  "humans": {
+    "h_a10a4d78dc54be": {
+      "author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_d90bd15399ec64": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c34d-b638-7e70-918b-c5cb977e9a0e",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
