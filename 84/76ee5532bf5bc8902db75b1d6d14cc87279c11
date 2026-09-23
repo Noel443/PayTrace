@@ -1,0 +1,111 @@
+frontend/app.js
+  s_7b1859e4308a44::t_155634f2c8e5ad 44,70,264
+  s_7b1859e4308a44::t_25d63c748fdd9f 222,328,345
+  s_7b1859e4308a44::t_6685eb80d87538 41
+frontend/followup-data.js
+  s_b18a58f8f7a2ea::t_bcc59baf14592c 5,16,19
+scripts/project-jobs.test.mjs
+  s_7b1859e4308a44::t_7a10b914c7f9b0 1-72
+frontend/stream.js
+  s_b18a58f8f7a2ea::t_bcc59baf14592c 17,22,26
+scripts/projects.test.mjs
+  s_7b1859e4308a44::t_6685eb80d87538 81,83,102-122,126-127,130
+  s_7b1859e4308a44::t_7a10b914c7f9b0 123,134-140
+  s_7b1859e4308a44::t_5a8abd8c27914f 67-68,124-125,128-129,131-133
+frontend/limits.js
+  s_b18a58f8f7a2ea::t_bcc59baf14592c 1-2
+  s_7b1859e4308a44::t_6685eb80d87538 3-14,19
+  s_7b1859e4308a44::t_097092c0e9be0e 15-18
+scripts/ai.mjs
+  s_b18a58f8f7a2ea::t_bcc59baf14592c 41,62
+  s_7b1859e4308a44::t_6685eb80d87538 111-123,128
+  s_7b1859e4308a44::t_155634f2c8e5ad 139,141-142,144-145
+  s_7b1859e4308a44::t_25d63c748fdd9f 1,50,73,77,80,95,98-99,103-109,130-138,140,153,185,192
+  s_7b1859e4308a44::t_92549cbd9af8d7 47
+scripts/serve.mjs
+  s_7b1859e4308a44::t_43e3fdb494bf42 1,10,31-32,47,85,151,173,175-192,194
+  s_7b1859e4308a44::t_25d63c748fdd9f 251
+  s_b18a58f8f7a2ea::t_bcc59baf14592c 274
+  s_7b1859e4308a44::t_a4793cc5b145a2 281,298
+scripts/projects.mjs
+  s_7b1859e4308a44::t_7a10b914c7f9b0 116,122,130,148-149,160
+  s_7b1859e4308a44::t_16198b3443acfd 65,77,79-81,83-104,106-108,110,112-113,115,123,142-147,150-156,158-159,161
+  s_7b1859e4308a44::t_86802eb90652e5 61-62,105,157
+frontend/index.html
+  s_7b1859e4308a44::t_16198b3443acfd 24
+  s_b18a58f8f7a2ea::t_bcc59baf14592c 3,12
+README.md
+  s_7b1859e4308a44::t_7a10b914c7f9b0 145
+  s_7b1859e4308a44::t_b3e5a849cae243 143,147,153,156,278,286
+  s_7b1859e4308a44::t_1c2ded925ebf47 154-155,157,191,220,224,290,340
+scripts/project-jobs.mjs
+  s_7b1859e4308a44::t_43e3fdb494bf42 1-17,19-22,25-30,32-38
+  s_7b1859e4308a44::t_6996004974db5b 18,23-24,31
+scripts/real-investigation.mjs
+  s_b18a58f8f7a2ea::t_bcc59baf14592c 24,28,31
+  s_7b1859e4308a44::t_ef970b4b2f5135 1,32,34,37-38
+frontend/project-settings.js
+  s_7b1859e4308a44::t_155634f2c8e5ad 18,24,44,102,130-134
+  s_7b1859e4308a44::t_a564719ad40ef6 3,10,12,15,21,57,63,78,87,94,96,98-101,103-108,111-116,118,121-125,128,150
+  s_7b1859e4308a44::t_bdb5061f8bcaef 93,95,97,109-110
+scripts/images.test.mjs
+  s_7b1859e4308a44::t_6685eb80d87538 60
+  s_7b1859e4308a44::t_c35aec435d4e5c 72
+scripts/model-config.test.mjs
+  s_7b1859e4308a44::t_155634f2c8e5ad 11,20
+frontend/followup-ui.js
+  s_7b1859e4308a44::t_6685eb80d87538 21,23
+  s_7b1859e4308a44::t_0b05155d6f5081 38
+scripts/stream.test.mjs
+  s_7b1859e4308a44::t_6685eb80d87538 19,30,47,59-60,76,79-91,95
+  s_7b1859e4308a44::t_7a10b914c7f9b0 92,102-112
+  s_7b1859e4308a44::t_c303c78e68f81c 93-94,96-101
+frontend/local-api.js
+  s_7b1859e4308a44::t_5e6d5c4f64e35d 38,47
+scripts/evidence-graph.test.mjs
+  s_7b1859e4308a44::t_3d3f9f91dc2acc 7
+scripts/fixtures/mock-api.js
+  s_7b1859e4308a44::t_09033141c4d97d 101
+scripts/followup.mjs
+  s_7b1859e4308a44::t_97c06d85418b5d 1,11,15-17,31
+scripts/followup.test.mjs
+  s_7b1859e4308a44::t_9b116b572f2ed5 7,21-24,44,46,49-50,63,114-126
+scripts/investigation.test.mjs
+  s_7b1859e4308a44::t_b6a37e961e9559 8
+scripts/mysql-api.mjs
+  s_7b1859e4308a44::t_2f1372682ce07d 1,27,123
+scripts/project-http.test.mjs
+  s_7b1859e4308a44::t_6190acc9f9ef95 1-74
+scripts/project-ui.test.mjs
+  s_7b1859e4308a44::t_0d9abef183d615 1-25
+scripts/question-limits.test.mjs
+  s_7b1859e4308a44::t_e35ed0c1a0a1e4 1-13
+scripts/real-investigation.test.mjs
+  s_7b1859e4308a44::t_ee8691d27698ab 17-19,29
+scripts/workspaces.test.mjs
+  s_7b1859e4308a44::t_bb6cf1f6fdc747 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8476ee5532bf5bc8902db75b1d6d14cc87279c11",
+  "prompts": {},
+  "sessions": {
+    "s_7b1859e4308a44": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd62-c985-7442-8bd0-ccfefe03eeff",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    },
+    "s_b18a58f8f7a2ea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd52-4281-7682-ba99-0fb2cc7952d5",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
