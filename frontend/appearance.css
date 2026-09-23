@@ -1,0 +1,67 @@
+/* Neutral desktop palette shared by every component, including native controls. */
+:root {
+  color-scheme: light;
+  --tone-0: #0d0d0d;
+  --tone-10: #1a1a1a;
+  --tone-20: #303030;
+  --tone-30: #484848;
+  --tone-40: #606060;
+  --tone-50: #737373;
+  --tone-60: #858585;
+  --tone-70: #a0a0a0;
+  --tone-80: #bdbdbd;
+  --tone-85: #d0d0d0;
+  --tone-90: #e2e2e2;
+  --tone-93: #ebebeb;
+  --tone-95: #f0f0f0;
+  --tone-97: #f5f5f5;
+  --tone-98: #f9f9f9;
+  --tone-100: #ffffff;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --tone-0: #fafafa;
+  --tone-10: #eeeeee;
+  --tone-20: #e3e3e3;
+  --tone-30: #d2d2d2;
+  --tone-40: #bdbdbd;
+  --tone-50: #aaaaaa;
+  --tone-60: #999999;
+  --tone-70: #858585;
+  --tone-80: #646464;
+  --tone-85: #505050;
+  --tone-90: #3d3d3d;
+  --tone-93: #343434;
+  --tone-95: #2e2e2e;
+  --tone-97: #272727;
+  --tone-98: #242424;
+  --tone-100: #212121;
+}
+
+:root { --canvas: #fff; --surface: #fff; --text: #252525; --muted: #737373; --line: #e8e8e8; --primary: #252525; --accent: #ededed; --accent-ink: #333; }
+:root[data-theme="dark"] { --canvas: #181818; --surface: #212121; --text: #ececec; --muted: #a1a1a1; --line: #363636; --primary: #ececec; --accent: #333; --accent-ink: #ececec; }
+body, .login-page { background: var(--canvas); color: var(--text); }
+.sidebar { background: var(--tone-97); border-color: var(--line); }
+.brand-mark { background: var(--accent); color: var(--text); font-style: normal; transform: none; }
+.nav.active { background: var(--accent); color: var(--text); box-shadow: none; }
+.nav.active::after { background: var(--text); }
+.eyebrow { color: var(--muted); }
+.primary, .question-composer #run { background: var(--primary); color: var(--canvas); border-color: var(--primary); }
+.primary:hover, .question-composer #run:hover { background: var(--tone-30); border-color: var(--tone-30); }
+.question-composer { background: var(--surface); border-color: var(--line); box-shadow: 0 4px 24px #00000005; }
+.question-composer:focus-within { border-color: var(--tone-70); box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 5%, transparent); }
+.workspace-overview { background: var(--tone-98); border-color: var(--line); }
+.login-intro { background: var(--tone-97); }
+.theme-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 78px; min-height: 32px; border: 1px solid var(--line); border-radius: 9px; padding: 6px 10px; background: transparent; color: var(--text); font-size: 12px; cursor: pointer; }
+.theme-toggle:hover { background: var(--accent); border-color: var(--tone-80); }
+.login-theme-toggle { position: absolute; top: 32px; right: 36px; z-index: 2; }
+.tag { background: var(--accent); color: var(--text); }
+.tag.amber, .environment { background: #faf3df; color: #87651e; border-color: #e9d9af; }
+.danger-action, .delete-model { color: #b24940; }
+:root[data-theme="dark"] .tag.amber, :root[data-theme="dark"] .environment { background: #3d3320; color: #e5c076; border-color: #57472b; }
+:root[data-theme="dark"] .danger-action, :root[data-theme="dark"] .delete-model { color: #ed948b; }
+:root[data-theme="dark"] .danger-action:hover, :root[data-theme="dark"] .delete-model:hover { background: #402b2b; border-color: #74443f; }
+:root[data-theme="dark"] .graph-node.alert, :root[data-theme="dark"] #error { background: #372727; color: #edaaa2; border-color: #76504a; }
+:root[data-theme="dark"] .graph-node.pending, :root[data-theme="dark"] .uncertainty, :root[data-theme="dark"] .conclusion.pending, :root[data-theme="dark"] .ai-live.is-incomplete { background: #332e23; color: #d7bb80; border-color: #655536; }
+:root[data-theme="dark"] .config-dialog::backdrop, :root[data-theme="dark"] #model-dialog::backdrop { background: #0009; }
+:root[data-theme="dark"] .config-dialog, :root[data-theme="dark"] #model-dialog { background: var(--surface); }
