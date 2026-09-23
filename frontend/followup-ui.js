@@ -11,10 +11,9 @@ function followupMarkdown(r){
   return turns.length?'\n\n## 追问对话\n'+turns.map((t,i)=>`\n### 第 ${i+1} 轮${t.unsaved?'（未保存）':''}\n\n问：${t.question}${screenshotMarkdown(t)}\n\n答：${t.text}${followupLogText(t)}\n\n模型：${t.model} · ${t.createdAt}`).join('\n'):'';
 }
 function refreshFollowupReport(report){
-  const note=$('#real-note')?.value,status=$('#real-feedback')?.value;
+  const draft=$('.resolution-panel')?.resolutionController?.getDraft();
   current=report;renderReport();
-  if(note!==undefined)$('#real-note').value=note;
-  if(status!==undefined)$('#real-feedback').value=status;
+  if(draft)$('.resolution-panel').resolutionController.setDraft(draft);
 }
 function renderFollowup(r){
   const pending=pendingFollowups.get(r.id),history=PayTraceFollowup.context(r);
@@ -66,6 +65,6 @@ async function runFollowup(r,attachments){
     if(live.textContent)status.textContent+=' 下方为未完成内容，未保存。';
   }finally{
     if(followupJob===controller)followupJob=null;busy=false;
-    if(current?.id===r.id&&workspaceId===scope){const pending=pendingFollowups.has(r.id);$('#followup-question').disabled=pending;$('#followup-send').disabled=pending;$('#followup-stop').hidden=true;$('#real-save').disabled=false;}
+    if(current?.id===r.id&&workspaceId===scope){const pending=pendingFollowups.has(r.id);$('#followup-question').disabled=pending;$('#followup-send').disabled=pending;$('#followup-stop').hidden=true;$('.resolution-panel')?.resolutionController?.refresh();}
   }
 }

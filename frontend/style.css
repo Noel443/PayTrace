@@ -577,6 +577,7 @@ html[data-auth-required]:not([data-authenticated]) body { visibility: hidden; }
 .detail-eyebrow{letter-spacing:0}
 .detail-heading h1,.detail-categories button span,.detail-node strong{overflow-wrap:anywhere}
 .detail-node:focus-visible,.detail-categories button:focus-visible{outline:2px solid var(--tone-30);outline-offset:3px}
+.detail-node-summary{display:block;margin-top:7px;color:var(--tone-50);font-size:12px;line-height:1.7;overflow-wrap:anywhere}.detail-transitions{margin-top:28px;border-top:1px solid var(--tone-90);padding-top:18px}.detail-transitions h3{font-size:13px;margin:0 0 12px}.detail-transitions article{padding:12px 0;border-bottom:1px solid var(--tone-90)}.detail-transitions article>b{font-size:12px}.detail-transitions article .tag{margin-left:8px}.detail-transitions article p{margin:7px 0;color:var(--tone-50);font-size:12px;line-height:1.7}.detail-transitions article small{color:var(--tone-60);font-size:11px}
 
 .followup-panel{margin:28px 0;padding:24px;border:1px solid var(--line,var(--tone-90));border-radius:8px;background:var(--tone-98)}
 .followup-panel textarea{display:block;width:100%;box-sizing:border-box;margin:10px 0;resize:vertical}

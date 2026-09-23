@@ -9,7 +9,7 @@ import {projectCandidate,changeProjects,publicProjects,readProjects,writeProject
 import {config} from './ai.mjs';
 const exec=promisify(execFile);
 const base={workspace:'card',name:'支付核心',repoPath:'/missing/repo',branch:'master',focus:'支付与通知',scanEnabled:false};
-const answer={summary:'支付受理与通知',businesses:['支付'],chains:[{name:'支付链路',steps:[{label:'受理交易',service:'trx',description:'校验请求后入库',evidenceIds:['P1']}]}],uncertainties:['未提供渠道实现']};
+const answer={summary:'支付受理与通知',businesses:['支付受理'],chains:[{name:'支付链路',trigger:'商户提交支付请求',goal:'受理支付并生成交易',outcome:'交易记录已创建；渠道处理未提供',steps:[{label:'受理交易',service:'trx',description:'校验请求后创建交易记录',input:'商户订单号、金额',decision:'重复订单如何处理未说明',stateChange:'新增待处理交易',failure:'失败去向未说明',evidenceIds:['P1']}],transitions:[]}],uncertainties:['未提供渠道实现']};
 async function temp(t){const dir=await mkdtemp(path.join(tmpdir(),'paytrace-project-test-'));t.after(()=>rm(dir,{recursive:true,force:true}));return dir}
 test('project settings isolate workspaces and editing preserves an explicitly stale analysis',async t=>{
   let store=changeProjects({version:1,projects:[]},base);const id=store.projects[0].id;
@@ -71,14 +71,17 @@ test('model output requires structure and real source IDs, and rejects empty or 
   const snapshot=await projectSnapshot(base,'# 业务文档');
   assert.deepEqual(validateAnalysis('```json\n'+JSON.stringify(answer)+'\n```',snapshot),answer);
   for(const value of [{...answer,chains:[]},{...answer,businesses:[]},{...answer,chains:[{name:'凭空推断',steps:[{...answer.chains[0].steps[0],evidenceIds:['P999']}]}]}])assert.throws(()=>validateAnalysis(JSON.stringify(value),snapshot));
+  const linked={...answer,chains:[{...answer.chains[0],steps:[...answer.chains[0].steps,{...answer.chains[0].steps[0],label:'消费支付消息'}],transitions:[{from:0,to:1,condition:'发布支付消息后由消费者处理',mode:'async',evidenceIds:['P1']}]}]};
+  assert.equal(validateAnalysis(JSON.stringify(linked),snapshot).chains[0].transitions[0].mode,'async');
+  for(const transition of [{from:0,to:2,condition:'越界',mode:'sync',evidenceIds:['P1']},{from:0,to:1,condition:'伪造关系',mode:'sync',evidenceIds:['P9']}])assert.throws(()=>validateAnalysis(JSON.stringify({...linked,chains:[{...linked.chains[0],transitions:[transition]}]}),snapshot));
   assert.throws(()=>validateAnalysis('not json',snapshot),/有效的业务链路 JSON/);
 });
 test('project analysis uses configured streaming model and retains provenance without persisting source text',async()=>{
   const events=[],c=config({AI_PROVIDER:'ollama',AI_MODEL:'fixture-project'});
   const result=await analyzeProject({...base,revision:2},c,'# 业务专属文档内容',(kind,value)=>events.push({kind,value}),{fetcher:async(url,options)=>{
     assert.equal(url,'http://127.0.0.1:11434/api/chat');
-    const body=JSON.parse(options.body);assert.equal(body.stream,true);assert.equal(body.options.num_predict,4000);
-    assert(body.messages[1].content.includes('业务专属文档内容'));assert(body.messages[0].content.includes('静态处理链路'));
+    const body=JSON.parse(options.body);assert.equal(body.stream,true);assert.equal(body.options.num_predict,7000);
+    assert(body.messages[1].content.includes('业务专属文档内容'));assert(body.messages[0].content.includes('状态变化'));assert(body.messages[0].content.includes('异步边'));assert(body.messages[0].content.includes('从业务入口'));
     return new Response(JSON.stringify({message:{content:JSON.stringify(answer)},done:true})+'\n',{headers:{'Content-Type':'application/x-ndjson'}});
   }});
   assert.equal(result.revision,2);assert.equal(result.model,'fixture-project');assert.equal(result.sources[0].file,'workspace-knowledge.md');
