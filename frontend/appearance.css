@@ -42,7 +42,7 @@
 :root[data-theme="dark"] { --canvas: #181818; --surface: #212121; --text: #ececec; --muted: #a1a1a1; --line: #363636; --primary: #ececec; --accent: #333; --accent-ink: #ececec; }
 body, .login-page { background: var(--canvas); color: var(--text); }
 .sidebar { background: var(--tone-97); border-color: var(--line); }
-.brand-mark { background: var(--accent); color: var(--text); font-style: normal; transform: none; }
+.brand-mark { width: 36px; height: 36px; object-fit: cover; background: var(--accent); color: var(--text); font-style: normal; transform: none; }
 .nav.active { background: var(--accent); color: var(--text); box-shadow: none; }
 .nav.active::after { background: var(--text); }
 .eyebrow { color: var(--muted); }
