@@ -1,0 +1,53 @@
+frontend/bootstrap.js
+  s_7c61729f88459a::t_a63d55c9040d59 29,31
+README.md
+  s_7c61729f88459a::t_78427f8304d521 327
+  s_7c61729f88459a::t_179cfa9d7739a8 270-273,278,308
+  s_7c61729f88459a::t_296aabd5f61f51 183,218
+frontend/images.js
+  s_7c61729f88459a::t_a63d55c9040d59 1-22
+frontend/app.js
+  s_7c61729f88459a::t_94ce74f922592e 37
+  s_7c61729f88459a::t_a63d55c9040d59 19,43,50,61,69,71,73,112,408-417
+scripts/ai.mjs
+  s_7c61729f88459a::t_a63d55c9040d59 96-97,111
+frontend/followup-ui.js
+  s_7c61729f88459a::t_94ce74f922592e 18
+  s_7c61729f88459a::t_a63d55c9040d59 39
+scripts/serve.mjs
+  s_7c61729f88459a::t_a63d55c9040d59 107,132,139-140
+scripts/real-investigation.mjs
+  s_7c61729f88459a::t_94ce74f922592e 13
+  s_7c61729f88459a::t_a63d55c9040d59 1,9-10,14-15,36-38,40,42-44
+scripts/followup.mjs
+  s_7c61729f88459a::t_a63d55c9040d59 1,13
+scripts/mysql-api.mjs
+  s_7c61729f88459a::t_a63d55c9040d59 2,26
+scripts/images.test.mjs
+  s_7c61729f88459a::t_179cfa9d7739a8 1-27,29-51,53-60
+  s_7c61729f88459a::t_296aabd5f61f51 52
+  s_7c61729f88459a::t_78427f8304d521 28
+frontend/style.css
+  s_7c61729f88459a::t_a63d55c9040d59 590-591
+frontend/image-upload.js
+  s_7c61729f88459a::t_a63d55c9040d59 1-4,6-45
+  s_7c61729f88459a::t_94ce74f922592e 5
+frontend/index.html
+  s_7c61729f88459a::t_a63d55c9040d59 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2a2070e84adcf2581c1abf7702ea63b90f06647e",
+  "prompts": {},
+  "sessions": {
+    "s_7c61729f88459a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cc62-c6a5-7e21-acf6-3e56bed6c9e1",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
