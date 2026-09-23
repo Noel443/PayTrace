@@ -1,0 +1,19 @@
+frontend/appearance.css
+  s_c5f62678c1df2b::t_a034b74e8f1b11 45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "e426e155c8346a997248b7d875dc719a606932fc",
+  "prompts": {},
+  "sessions": {
+    "s_c5f62678c1df2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd1f-5f53-7851-822b-1c1a7a130067",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
