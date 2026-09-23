@@ -1,0 +1,49 @@
+frontend/followup-ui.js
+  s_52fb5ea8cd4ceb::t_69eed68e8c33a2 1-4,11,22,32,43
+scripts/log-evidence.mjs
+  s_52fb5ea8cd4ceb::t_2edd135f5fa26b 1-23,25-42,44-45,47,49-59,61-62,64-65,77-78,82-85,87,89-92
+  s_52fb5ea8cd4ceb::t_8ea5677c0e7319 24,43,46,48,86
+  s_52fb5ea8cd4ceb::t_f5ca8120d64ff2 60,63,66-76,79-81,88
+frontend/app.js
+  s_52fb5ea8cd4ceb::t_69eed68e8c33a2 68,73
+scripts/followup.test.mjs
+  s_52fb5ea8cd4ceb::t_8ea5677c0e7319 45-46,49,59,61
+  s_52fb5ea8cd4ceb::t_f5ca8120d64ff2 65-75
+scripts/real-investigation.mjs
+  s_52fb5ea8cd4ceb::t_2edd135f5fa26b 5,28-29
+  s_52fb5ea8cd4ceb::t_8ea5677c0e7319 36
+scripts/real-investigation.test.mjs
+  s_52fb5ea8cd4ceb::t_f5ca8120d64ff2 15
+README.md
+  s_52fb5ea8cd4ceb::t_8ea5677c0e7319 113,117
+  s_52fb5ea8cd4ceb::t_d34106f60183b3 280,331,334-338
+  s_52fb5ea8cd4ceb::t_168094e3a8c34b 339
+scripts/serve.mjs
+  s_52fb5ea8cd4ceb::t_69eed68e8c33a2 115
+scripts/ssh-logs.mjs
+  s_52fb5ea8cd4ceb::t_c98d099f540b40 7,24-25,39,42,63
+scripts/log-evidence.test.mjs
+  s_52fb5ea8cd4ceb::t_f5ca8120d64ff2 1-41
+  s_52fb5ea8cd4ceb::t_8ea5677c0e7319 42-52
+scripts/followup.mjs
+  s_52fb5ea8cd4ceb::t_69eed68e8c33a2 5,12,14,20,23-33,35
+frontend/followup-data.js
+  s_52fb5ea8cd4ceb::t_69eed68e8c33a2 6,11,19
+  s_52fb5ea8cd4ceb::t_8ea5677c0e7319 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "7e913bec5f2b84ef62f5c5f3be05caaf885dff60",
+  "prompts": {},
+  "sessions": {
+    "s_52fb5ea8cd4ceb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd0f-46ac-7b10-a5b3-434208152c9f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
