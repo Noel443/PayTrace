@@ -1,8 +1,7 @@
 (() => {
-  const picker=document.querySelector('#question-images'),previews=document.querySelector('#question-image-previews'),status=document.querySelector('#question-image-status');
-  const composer=document.querySelector('#question-composer'),addButton=document.querySelector('#add-question-images'),question=document.querySelector('#question');
+  window.createImageUpload=({picker,previews,status,composer,addButton,question,form,submit})=>{
   let images=[],version=0,loading=false;
-  function syncControls(){addButton.disabled=loading||busy||images.length>=PayTraceImages.maxCount;previews.querySelectorAll('button').forEach(button=>button.disabled=loading||busy);composer.setAttribute('aria-busy',String(loading));question.required=!images.length;}
+  function syncControls(){addButton.disabled=loading||busy||question.disabled||images.length>=PayTraceImages.maxCount;previews.querySelectorAll('button').forEach(button=>button.disabled=loading||busy||question.disabled);composer.setAttribute('aria-busy',String(loading));question.required=!images.length;}
   function render(){
     status.textContent=images.length?`已添加 ${images.length} / ${PayTraceImages.maxCount} 张截图，将发送给当前模型。`:'';
     previews.replaceChildren();
@@ -10,7 +9,7 @@
       const card=document.createElement('div');card.className='screenshot-card';
       const img=document.createElement('img');img.src=item.dataUrl;img.alt=item.name;
       const remove=document.createElement('button');remove.type='button';remove.className='screenshot-remove';remove.textContent='×';remove.title='移除截图 '+item.name;remove.setAttribute('aria-label','移除截图 '+item.name);
-      remove.onclick=()=>{if(loading||busy)return;images.splice(index,1);render()};card.append(img,remove);previews.append(card);
+      remove.onclick=()=>{if(loading||busy||question.disabled)return;images.splice(index,1);render()};card.append(img,remove);previews.append(card);
     });
     syncControls();
   }
@@ -30,7 +29,7 @@
     }finally{URL.revokeObjectURL(url)}
   }
   async function add(files){
-    if(loading||busy)return;
+    if(loading||busy||question.disabled)return;
     if(!files.length)return;
     if(images.length+files.length>PayTraceImages.maxCount){status.textContent=`最多添加 ${PayTraceImages.maxCount} 张截图，还可添加 ${PayTraceImages.maxCount-images.length} 张`;picker.value='';return;}
     const revision=version;loading=true;syncControls();status.textContent='正在处理截图…';
@@ -38,19 +37,22 @@
     catch(e){if(revision===version)status.textContent=e.message}
     finally{loading=false;picker.value='';syncControls()}
   }
-  addButton.addEventListener('click',()=>{if(!loading&&!busy)picker.click()});
+  addButton.addEventListener('click',()=>{if(!loading&&!busy&&!question.disabled)picker.click()});
   let dragDepth=0;
   composer.addEventListener('dragenter',event=>{if(![...event.dataTransfer.types].includes('Files'))return;event.preventDefault();dragDepth++;composer.classList.add('is-dragging')});
-  composer.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files')){event.preventDefault();event.dataTransfer.dropEffect=loading||busy?'none':'copy'}});
+  composer.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files')){event.preventDefault();event.dataTransfer.dropEffect=loading||busy||question.disabled?'none':'copy'}});
   composer.addEventListener('dragleave',()=>{if(--dragDepth<=0){dragDepth=0;composer.classList.remove('is-dragging')}});
   composer.addEventListener('drop',event=>{event.preventDefault();dragDepth=0;composer.classList.remove('is-dragging');add([...event.dataTransfer.files])});
-  new MutationObserver(syncControls).observe(document.querySelector('#run'),{attributes:true,attributeFilter:['disabled']});
+  new MutationObserver(syncControls).observe(submit,{attributes:true,attributeFilter:['disabled']});
   render();
   picker.addEventListener('change',()=>add([...picker.files]));
-  document.querySelector('#investigate-form').addEventListener('paste',event=>{
+  form.addEventListener('paste',event=>{
     const files=[...(event.clipboardData?.items||[])].filter(item=>item.kind==='file'&&item.type.startsWith('image/')).map(item=>item.getAsFile()).filter(Boolean);
     if(files.length){event.preventDefault();add(files)}
   });
-  window.questionImages={get(){if(loading)throw Error('截图正在处理，请稍后提交');return PayTraceImages.validate(images)},set(value=[]){version++;images=PayTraceImages.validate(value);status.textContent='';render()}};
+  return {get(){if(loading)throw Error('截图正在处理，请稍后提交');return PayTraceImages.validate(images)},set(value=[]){version++;images=PayTraceImages.validate(value);status.textContent='';render()}};
+  };
+  const select=id=>document.querySelector('#'+id);
+  window.questionImages=window.createImageUpload({picker:select('question-images'),previews:select('question-image-previews'),status:select('question-image-status'),composer:select('question-composer'),addButton:select('add-question-images'),question:select('question'),form:select('investigate-form'),submit:select('run')});
   window.addEventListener('paytrace:logout',()=>window.questionImages.set());
 })();

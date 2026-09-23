@@ -42,7 +42,7 @@ const runtimeMode=String(process.env.PAYTRACE_ENV||'test').toLowerCase()==='prod
 const counterpartUrl=String(process.env.PAYTRACE_COUNTERPART_URL||'').trim();
 const productionReadOnly=runtimeMode==='production';
 const access=requestAccess({port,publicOrigins,authenticated:!!database});
-const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
+const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.png':'image/png'};
 const server=http.createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Referrer-Policy','no-referrer');
@@ -80,7 +80,7 @@ const server=http.createServer(async(req,res)=>{
       if(!actor){json(res,401,{message:'请先登录，或登录会话已过期'});return;}
       if(pathname==='/api/import/browser'||pathname==='/api/workspaces'||pathname==='/api/workspaces/delete'||pathname.startsWith('/api/data/')){
         if(pathname==='/api/workspaces/delete'&&(projectBusy||sourcesBusy||active)){json(res,409,{message:'请等待排查或配置操作完成后归档空间'});return;}
-        const input=['GET','HEAD'].includes(req.method)?null:await bodyJson(req,pathname==='/api/data/investigations'?10000000:4000000);
+        const input=['GET','HEAD'].includes(req.method)?null:await bodyJson(req,(pathname==='/api/data/investigations'||/^\/api\/data\/investigations\/[^/]+\/followups$/.test(pathname))?10000000:4000000);
         const scope=new URL(req.url,'http://localhost').searchParams.get('workspace')||input?.workspace;
         if(pathname==='/api/workspaces/delete')projectBusy=sourcesBusy=true;
         try{
@@ -104,7 +104,7 @@ const server=http.createServer(async(req,res)=>{
     const controller=new AbortController(),disconnect=()=>{if(!res.writableEnded)controller.abort()};res.on('close',disconnect);
     const emit=(event,data)=>{if(!res.destroyed&&!res.writableEnded)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
     try{
-      const input=await bodyJson(req,10000000),scope=workspaceKey(input.workspace);
+      const input=await bodyJson(req,24000000),scope=workspaceKey(input.workspace);
       await checkWorkspace(scope);
       if(typeof input.reportId!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(input.reportId))throw Error('排查记录标识无效');
       const report=database?await persistent.handle('/api/data/investigations/'+input.reportId,'GET',null,scope):input.report;
@@ -112,11 +112,12 @@ const server=http.createServer(async(req,res)=>{
       if(database&&((report.followups||[]).length!==input.expectedCount||(report.revision??0)!==(input.revision??0)))throw Error('对话或证据已更新，请重新打开报告后追问');
       const markdown=database?(await persistent.handle('/api/data/knowledge','GET',null,scope)).markdown:input.markdown;
       res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'});res.flushHeaders();
-      const turn=await followup(aiConfig,report,input.question,markdown,emit,{signal:controller.signal,sources:sourceStore.sources,knownHostsFile});
+      const turn=await followup(aiConfig,report,input.question,markdown,emit,{signal:controller.signal,sources:sourceStore.sources,knownHostsFile,images:input.images});
       const update={turn,expectedCount:input.expectedCount,revision:input.revision};
       let saved=false,saveError='';
       if(database){try{await persistent.handle('/api/data/investigations/'+input.reportId+'/followups','POST',update,scope);saved=true}catch{saveError='回答已完成，但保存失败，请点击重试保存；若对话已更新，请先导出并重新打开报告。'}}
-      emit('done',{turn,saved,saveError});res.end();
+      // The client retains the submitted images; do not echo base64 in bounded SSE events.
+      emit('done',{turn:{...turn,images:undefined},saved,saveError});res.end();
     }catch(e){if(!res.destroyed){const message=e.code?'追问服务暂不可用，请重试':e.message;if(res.headersSent){emit('error',{message});res.end()}else json(res,e.status||400,{message})}}
     finally{active--;res.off('close',disconnect)}return;
   }

@@ -406,12 +406,12 @@ function aiTextWithReferences(r){
   return esc(r.ai.text).replace(/\[(E\d+)\]/g,(match,id)=>ids.has(id)?`<button type="button" class="evidence-link ai-citation" data-evidence="${id}" aria-label="查看证据 ${id}">${match}</button>`:match).replace(/^#{1,3}[ \t]+(已确认事实|可能原因|待核实事项|运营下一步)[ \t]*$/gm,'<h4>$1</h4>');
 }
 
-function renderScreenshotReport(report){
+function renderScreenshotReport(report,container){
   const images=PayTraceImages.validate(report.images);if(!images.length)return;
   const section=document.createElement('section');section.className='report-screenshots';
   const title=document.createElement('h3');title.textContent='本次截图（点击放大）';section.append(title);
   const grid=document.createElement('div');grid.className='screenshot-previews';section.append(grid);
   images.forEach((item,index)=>{const button=document.createElement('button');button.type='button';button.className='screenshot-card text-button';const img=document.createElement('img');img.src=item.dataUrl;img.alt='图'+(index+1)+'：'+item.name;button.append(img,document.createTextNode('图'+(index+1)));button.onclick=()=>{const dialog=document.createElement('dialog');dialog.style.maxWidth='95vw';const close=document.createElement('button');close.textContent='关闭';close.className='text-button';close.onclick=()=>dialog.close();const full=new Image();full.src=item.dataUrl;full.alt=img.alt;full.style.cssText='display:block;max-width:85vw;max-height:80vh;object-fit:contain';dialog.append(close,full);dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal()};grid.append(button)});
-  document.querySelector('#result .result-heading').after(section);
+  if(container)container.append(section);else document.querySelector('#result .result-heading').after(section);
 }
 function screenshotMarkdown(report){return (report.images||[]).length?'\n\n## 问题截图\n'+PayTraceImages.validate(report.images).map((item,index)=>`![图${index+1}](${item.dataUrl})`).join('\n\n'):''}
