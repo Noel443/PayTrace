@@ -1,0 +1,56 @@
+frontend/bootstrap.js
+  s_7e788323ae93a0::t_db4e7c76fa9d9e 31
+frontend/theme.css
+  h_a10a4d78dc54be 1-270
+scripts/resolution-ui.test.mjs
+  s_7e788323ae93a0::t_53464eb0523699 1-83
+frontend/followup-ui.js
+  s_7e788323ae93a0::t_e2df0d857ada60 68
+  s_7e788323ae93a0::t_db4e7c76fa9d9e 14,16
+README.md
+  s_7e788323ae93a0::t_e2df0d857ada60 131,282,317
+  s_0decd960e1ac74::t_dd2ac27880df70 141,145,153,297
+  s_0decd960e1ac74::t_d56d42fbeb453f 303
+frontend/resolution-ui.js
+  s_7e788323ae93a0::t_eca3387c8de986 1-63,65-67
+  s_7e788323ae93a0::t_e2df0d857ada60 64
+frontend/project-settings.js
+  s_0decd960e1ac74::t_8f22af188c3314 42-44
+scripts/projects.mjs
+  s_0decd960e1ac74::t_df619867fd0bb8 99-100,120
+  s_0decd960e1ac74::t_3083d6061e7051 98,101-107,113-119
+frontend/style.css
+  s_0decd960e1ac74::t_14c2419531396b 580
+scripts/projects.test.mjs
+  s_0decd960e1ac74::t_77670225ab7c00 83
+  s_0decd960e1ac74::t_780272a5df66a2 12,74-76,84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0a7c1e2a5d9c514d27bb2dc0dbe4e0340f31df61",
+  "prompts": {},
+  "humans": {
+    "h_a10a4d78dc54be": {
+      "author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_0decd960e1ac74": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd42-2d32-7743-8384-28418c7e9486",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    },
+    "s_7e788323ae93a0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd38-fbe5-7f90-8d1a-fa1b38922efe",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
