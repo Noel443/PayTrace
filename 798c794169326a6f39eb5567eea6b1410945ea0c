@@ -1,0 +1,49 @@
+frontend/local-api.js
+  s_d84cd09e55a80c::t_4231e1463af78b 1-23,25-52
+  s_d84cd09e55a80c::t_dba6d3424a33d4 24
+frontend/app.js
+  s_d84cd09e55a80c::t_4231e1463af78b 28,31,34-37
+  s_d84cd09e55a80c::t_18b74521435beb 243
+scripts/investigation.test.mjs
+  s_d84cd09e55a80c::t_4231e1463af78b 8
+README.md
+  s_d84cd09e55a80c::t_e9d69c23ed5424 1,9,11,17,95,99,107,126,130-134,140,149-150
+frontend/index.html
+  s_d84cd09e55a80c::t_4231e1463af78b 9,11,21,23,50
+  s_d84cd09e55a80c::t_4e82aa4cfddd15 6,15
+scripts/fixtures/workspaces.js
+  s_d84cd09e55a80c::t_4231e1463af78b 1-745
+frontend/workspaces.js
+  s_d84cd09e55a80c::t_4231e1463af78b 1,14,16,21-22,29-31,36-37,44-46,91-92,95-96,98,110
+scripts/evidence-graph.test.mjs
+  s_d84cd09e55a80c::t_4231e1463af78b 7
+scripts/workspaces.test.mjs
+  s_d84cd09e55a80c::t_e9d69c23ed5424 8-10,12-13,15-18,21-27,29-43,46-47,49,66,71-72,76-77,79,92,129,132-133,144-147
+docs/PayTrace项目总结.md
+  s_6f237d008359b1::t_2c143a4746bba8 1-4,6-8,12-14,18-20
+  s_6f237d008359b1::t_e1d601230258b8 5,9-11,15-17,21-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "798c794169326a6f39eb5567eea6b1410945ea0c",
+  "prompts": {},
+  "sessions": {
+    "s_6f237d008359b1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c1c1-3d96-79d1-b302-adbf4deb150e",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    },
+    "s_d84cd09e55a80c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c1dc-b0b0-76c1-9e1f-a3761cf537f8",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,145 @@
+scripts/model-config.test.mjs
+  s_a9b441c4745001::t_908311c6722d30 84-91
+  s_a9b441c4745001::t_8c94dd384200a4 57
+scripts/remote-project.test.mjs
+  s_ac253334711626::t_aecf835a7ed470 1-40
+scripts/log-sources.test.mjs
+  s_c2ebf6014666c6::t_210819d3e4c3fb 25,35-43
+  s_a9b441c4745001::t_908311c6722d30 45-57
+  s_ac253334711626::t_00e1273084054e 1-24,26-34,44
+frontend/examples/外卡支付-通知异常排查手册.md
+  s_ac253334711626::t_d629bbca857ec2 1-67
+scripts/ssh-logs.mjs
+  s_ac253334711626::t_c1b1da65987231 1-6,15-53,55-66
+  s_c2ebf6014666c6::t_210819d3e4c3fb 7-14
+  s_ac253334711626::t_6fd34e555d3743 54
+docs/跨境项目扫描与工作空间说明.md
+  s_ac253334711626::t_d249eb7fe31d6f 31
+scripts/ai.mjs
+  s_ac253334711626::t_b13dbbdc27b867 69,71-77,84
+frontend/mock-api.js
+  s_ac253334711626::t_d629bbca857ec2 73,75
+  s_a9b441c4745001::t_49be77766beaa4 60,74,102
+frontend/auth.js
+  s_ac253334711626::t_fedb4169036c43 1-22
+frontend/index.html
+  s_ac253334711626::t_fedb4169036c43 2-3,6,21
+  s_c2ebf6014666c6::t_10764ef36321f5 9
+  s_ac253334711626::t_ada57c88762653 15,49
+  s_ac253334711626::t_578a69510e40ad 46
+  s_a9b441c4745001::t_49be77766beaa4 5,22
+  s_ac253334711626::t_33d31bf2b34c54 17,20,23,50
+  s_ac253334711626::t_2950f4b4c60c81 48
+  s_c2ebf6014666c6::t_210819d3e4c3fb 47
+scripts/investigation.test.mjs
+  s_a9b441c4745001::t_908311c6722d30 8
+docs/PayTrace演示说明与后续技术架构.md
+  s_a9b441c4745001::t_2a8ef5edb80449 102
+scripts/projects.test.mjs
+  s_a9b441c4745001::t_908311c6722d30 88-98
+  s_ac253334711626::t_fed404d7cc158d 1-87
+frontend/workspace-settings.js
+  s_ac253334711626::t_578a69510e40ad 1-6,20,22,26-27,44,46,48-49,51-52,54-61,63-64,66-68,70-71,73,75-78,80-81,88,105-106
+  s_c2ebf6014666c6::t_210819d3e4c3fb 65,72
+  s_a9b441c4745001::t_e79a3b960d8d12 7-19,21,23-25,28-42,50,53,62,74,79,83-84,87
+  s_ac253334711626::t_2950f4b4c60c81 43,45,47,69,82,85-86,89-104
+scripts/ssh-logs.test.mjs
+  s_c2ebf6014666c6::t_210819d3e4c3fb 52-70
+  s_ac253334711626::t_6fd34e555d3743 1-51
+scripts/remote-project.mjs
+  s_ac253334711626::t_39866db5f13031 1-40
+docs/PayTrace参赛汇报文档.md
+  s_a9b441c4745001::t_78bb0dfbdf89ad 1-113
+scripts/log-sources.mjs
+  s_ac253334711626::t_c7e60f8bc7f90c 1-15,19-24,26,28-31,36-49,51-54
+  s_a9b441c4745001::t_2d12e6bb935849 32-35
+  s_ac253334711626::t_c1b1da65987231 27,50
+  s_c2ebf6014666c6::t_210819d3e4c3fb 16-18,25
+frontend/login.html
+  s_ac253334711626::t_fedb4169036c43 1-21
+frontend/project-settings.js
+  s_ac253334711626::t_ada57c88762653 19,32,52-56,62,64,69
+  s_a9b441c4745001::t_e79a3b960d8d12 3,24,59,102-103,105-110,122
+  s_ac253334711626::t_407b4f0879607c 98
+  s_ac253334711626::t_9b0590b2c6dfbb 1-2,4-18,20-23,25-31,33-51,57-58,60-61,63,65-68,70-97,99-101,104,111-121,123-135
+scripts/workspaces.test.mjs
+  s_a9b441c4745001::t_908311c6722d30 7,95-133
+  s_ac253334711626::t_00e1273084054e 79-94,134
+scripts/projects.mjs
+  s_a9b441c4745001::t_2d12e6bb935849 27-32
+  s_ac253334711626::t_b13dbbdc27b867 1-8,10-15,18-19,23,25-26,33-63,65-106,108
+  s_ac253334711626::t_39866db5f13031 9,16-17,20-22,24,64,107
+frontend/app.js
+  s_a9b441c4745001::t_e175fe6106c088 188,198,202,220-221,223-224,227,267-268
+  s_a9b441c4745001::t_2c6ec3f89b81d7 18
+  s_ac253334711626::t_00e1273084054e 76
+  s_ac253334711626::t_d3e3728e739ab9 34,36
+  s_a9b441c4745001::t_8c94dd384200a4 7,13,33,35
+  s_ac253334711626::t_578a69510e40ad 11,14,19-21,78,94,319,321
+  s_ac253334711626::t_33d31bf2b34c54 4,15,30,84,322
+  s_ac253334711626::t_fedb4169036c43 92
+  s_a9b441c4745001::t_49be77766beaa4 5,12,57,60,63-71,97,102-103
+README.md
+  s_ac253334711626::t_d249eb7fe31d6f 103,143,163
+  s_c2ebf6014666c6::t_a1a4117e344633 172-177
+  s_ac253334711626::t_d3e3728e739ab9 20-25,107,121
+  s_a9b441c4745001::t_2a8ef5edb80449 9,28-40,72
+  s_ac253334711626::t_2aa190e22eaac9 41-44,46-50,52-55,58-60
+  s_ac253334711626::t_a8805a83ff9ebc 45,51,56-57
+  s_ac253334711626::t_00e1273084054e 13-19,26-27
+  s_a9b441c4745001::t_d7eb101b4f91bc 5-8,10-12
+frontend/workspaces.js
+  s_a9b441c4745001::t_49be77766beaa4 638-659,737-744
+  s_ac253334711626::t_d629bbca857ec2 667-709
+  s_ac253334711626::t_c7e60f8bc7f90c 626-637,729-736,745
+  s_ac253334711626::t_d3e3728e739ab9 666
+frontend/style.css
+  s_ac253334711626::t_578a69510e40ad 488-508
+  s_a9b441c4745001::t_49be77766beaa4 550-554
+  s_ac253334711626::t_d629bbca857ec2 434-487
+  s_ac253334711626::t_2950f4b4c60c81 509-514
+  s_ac253334711626::t_11743a5490cb27 515-549
+frontend/login.js
+  s_ac253334711626::t_fedb4169036c43 1-19
+scripts/model-config.mjs
+  s_a9b441c4745001::t_e175fe6106c088 44,49
+  s_ac253334711626::t_c7e60f8bc7f90c 26
+scripts/serve.mjs
+  s_a9b441c4745001::t_2d12e6bb935849 32-48,63
+  s_ac253334711626::t_33d31bf2b34c54 8,15-16,49-62,64-84
+  s_ac253334711626::t_c1b1da65987231 9,17,96-111
+  s_ac253334711626::t_c7e60f8bc7f90c 10-11,13-14,85-91,93-95,112-114
+  s_ac253334711626::t_6fd34e555d3743 92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2e3dffe16b585c23507620144eee8c87f7456f0d",
+  "prompts": {},
+  "sessions": {
+    "s_a9b441c4745001": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0bd85-94e9-7f73-83aa-8213c5c1679f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    },
+    "s_ac253334711626": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0bca8-4959-7042-83d6-28dbd2a02406",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    },
+    "s_c2ebf6014666c6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0bcea-953e-79d3-8cb4-e9338a54592d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}

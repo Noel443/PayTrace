@@ -1,0 +1,43 @@
+docs/证据图谱与流式分析演示.md
+  s_ac253334711626::t_066b356b9b6ef0 1-57
+frontend/style.css
+  s_ac253334711626::t_4f453078829f87 432-433
+  s_ac253334711626::t_2f809b396c118b 366-431
+README.md
+  s_ac253334711626::t_066b356b9b6ef0 12,39-44,93,104-106
+frontend/stream.js
+  s_ac253334711626::t_2af0704d924725 1-32
+scripts/stream.test.mjs
+  s_ac253334711626::t_3d1af54b9fd58a 1-47
+frontend/app.js
+  s_ac253334711626::t_aac131e40dae72 123
+  s_ac253334711626::t_4f453078829f87 30,105,129,163,311
+  s_ac253334711626::t_2f809b396c118b 3,11,25,29,31,93-97,99-104,106-115,118-122,124-128,130-149,151-157,159-162,164-168,266
+scripts/evidence-graph.test.mjs
+  s_ac253334711626::t_445eb2cfe97bca 15
+  s_ac253334711626::t_3d1af54b9fd58a 1-14,16-37
+frontend/evidence-graph.js
+  s_ac253334711626::t_2af0704d924725 1-62
+frontend/index.html
+  s_ac253334711626::t_2f809b396c118b 46
+scripts/ai.mjs
+  s_ac253334711626::t_1dff9b84febc31 2,33,35-36,42-46,67-126
+scripts/serve.mjs
+  s_ac253334711626::t_1dff9b84febc31 5,58,66-69,75-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "1cf42a89856996e3c203be5d734cd2b6564323ff",
+  "prompts": {},
+  "sessions": {
+    "s_ac253334711626": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0bca8-4959-7042-83d6-28dbd2a02406",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
