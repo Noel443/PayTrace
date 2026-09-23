@@ -101,7 +101,8 @@
       $('#project-analysis-progress').hidden=false;
       $('#project-analysis-stages').innerHTML=(job.stages||[]).map(v=>'<li>'+esc(v)+'</li>').join('');
       const seconds=Math.floor(((job.finishedAt?Date.parse(job.finishedAt):Date.now())-Date.parse(job.startedAt))/1000);
-      $('#project-analysis-count').textContent=p.name+' · '+job.status+' · '+seconds+' 秒 · 已接收 '+job.received+' 字';
+      $('#project-analysis-count').textContent=p.name+' · '+({running:'分析中',saving:'保存中',completed:'已完成',failed:'失败',cancelled:'已停止',interrupted:'已中断'}[job.status]||job.status)+' · '+seconds+' 秒 · 已接收 '+job.received+' 字';
+      $('#project-analysis-message').textContent=job.message||'';
       status(job.message);
     }
     controls();clearTimeout(poll);

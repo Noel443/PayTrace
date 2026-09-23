@@ -1,3 +1,4 @@
+import {modelFetch} from './model-transport.mjs';
 import '../frontend/limits.js';
 import {readFile} from 'node:fs/promises';
 import '../frontend/stream.js';
@@ -74,7 +75,7 @@ export async function analyze(c,input,fetcher=fetch,{timeoutMs=analysisTimeoutSe
   return {status:'completed',model:c.model,text:content,notice:'真实 AI 分析 · 使用模拟交易与所附 Markdown；未经人工确认，以日志证据为准。',analyzedAt:new Date().toISOString()};
 }
 
-export async function analyzeStream(c,input,emit,{fetcher=fetch,signal,...options}={}){
+export async function analyzeStream(c,input,emit,{fetcher=modelFetch,signal,...options}={}){
   const messages=messagesFor(c,input);
   emit('stage',{phase:'prepared',message:`已整理 ${input.report.evidence.length} 条关联证据与业务文档`});
   return modelTextStream(c,messages,emit,{fetcher,signal,...options});
@@ -92,7 +93,7 @@ function modelServiceError(error){
   return Error('模型接口返回错误，未提供可识别的错误类型；请在模型服务商处检查请求记录，或测试连接后重试');
 }
 
-export async function modelTextStream(c,messages,emit,{fetcher=fetch,signal,maxTokens=16384,connectMs=30000,idleMs=180000}={}){
+export async function modelTextStream(c,messages,emit,{fetcher=modelFetch,signal,maxTokens=16384,connectMs=30000,firstResponseMs=180000,idleMs=180000}={}){
   if(!c.enabled)throw Error('请先在模型服务商中启用有效的 AI 连接');
   const ollama=c.provider==='ollama';
   const textSize=messages.reduce((n,m)=>n+(typeof m.content==='string'?m.content.length:m.content.filter(p=>p.type==='text').reduce((v,p)=>v+p.text.length,0)),0);
@@ -105,12 +106,17 @@ export async function modelTextStream(c,messages,emit,{fetcher=fetch,signal,maxT
   let phase='连接等待',timer;
   const arm=ms=>{clearTimeout(timer);timer=setTimeout(()=>controller.abort(Error('模型'+phase+'超时')),ms)};
   const total=setTimeout(()=>controller.abort(Error('模型请求超过总时限 '+timeoutSeconds+' 秒')),timeoutSeconds*1000);
+  const onConnected=()=>{
+    if(requestSignal.aborted)return;
+    phase='首响应等待';arm(firstResponseMs);
+    emit('stage',{phase:'waiting',message:'连接已建立，等待模型首响应（最多 '+firstResponseMs/1000+' 秒；仍受总时限约束）'});
+  };
   arm(connectMs);
   try{
-  emit('stage',{phase:'connecting',message:'正在连接 '+c.model+'，本次分析最多等待 '+timeoutSeconds+' 秒',model:c.model});
+  emit('stage',{phase:'connecting',message:'正在连接 '+c.model+'（建连最多 '+connectMs/1000+' 秒；本次模型请求总时限 '+timeoutSeconds+' 秒）',model:c.model});
   let response,numCtx;
   if(ollama){
-    const metadata=await fetcher(c.base+'/api/show',{method:'POST',redirect:'error',signal:requestSignal,headers:{'Content-Type':'application/json'},body:JSON.stringify({model:c.model})});
+    const metadata=await fetcher(c.base+'/api/show',{method:'POST',redirect:'error',signal:requestSignal,onConnected,headers:{'Content-Type':'application/json'},body:JSON.stringify({model:c.model})});
     if(!metadata.ok)throw Error('无法读取 Ollama 模型上下文容量，请检查 /api/show 支持');
     const reader=metadata.body.getReader();let bytes=0,parts=[];
     try{while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>1000000)throw Error('Ollama 模型信息过大');parts.push(Buffer.from(value))}}finally{await reader.cancel()}
@@ -119,15 +125,19 @@ export async function modelTextStream(c,messages,emit,{fetcher=fetch,signal,maxT
     // UTF-8 bytes conservatively bound byte-tokenized text; reserve template and image space.
     numCtx=messages.reduce((n,m)=>n+Buffer.byteLength(m.content)+((m.images?.length||0)*16384),maxTokens+2048);
     if(!capacity||numCtx>Math.min(capacity,262144))throw Error('Ollama 模型上下文容量不足或无法确认容量；未截断输入，请缩短材料或使用更大上下文的模型');
-    arm(connectMs);
+    phase='连接等待';arm(connectMs);
   }
   try{
     response=await fetcher(c.base+(ollama?'/api/chat':'/chat/completions'),{
-      method:'POST',redirect:'error',signal:requestSignal,
+      method:'POST',redirect:'error',signal:requestSignal,onConnected,
       headers:{'Content-Type':'application/json',...(!ollama?{Authorization:'Bearer '+c.key}:{})},
       body:JSON.stringify({model:c.model,messages,stream:true,...(ollama?{options:{num_predict:maxTokens,num_ctx:numCtx}}:{max_tokens:maxTokens})})
     });
-  }catch{throw Error(signal?.aborted?'分析已停止':controller.signal.reason?.message||'模型连接失败，请检查模型服务');}
+  }catch(error){
+    const networkCode=error.cause?.code||error.code;
+    const reason=networkCode==='ENOTFOUND'?'模型地址 DNS 解析失败':networkCode==='ECONNREFUSED'?'模型接口拒绝连接':networkCode==='ECONNRESET'?'模型接口连接被重置':/CERT|TLS|SSL/.test(networkCode||'')?'模型 TLS 证书或握手失败':'模型连接失败，请检查模型服务';
+    throw Error(signal?.aborted?'分析已停止':controller.signal.reason?.message||reason);
+  }
   phase='首响应／无数据等待';arm(idleMs);
   if(response.body){
     const upstream=response.body.getReader();let bytes=0;

@@ -22,4 +22,9 @@ test('restored task is observed without resubmission; leaving scope does not can
   await node('#stop-project-analysis').onclick();
   assert.deepEqual(calls.find(c=>c.body).body,{action:'cancel',workspace:'card',id:'p',taskId:'task'});
   assert.equal(node('#stop-project-analysis').disabled,true);
+  project.task.status='failed';project.task.message='模型首响应等待超时';
+  await context.window.loadProjectSettings();
+  assert.match(node('#project-analysis-count').textContent,/失败/);
+  assert.equal(node('#project-analysis-message').textContent,'模型首响应等待超时');
+
 });
