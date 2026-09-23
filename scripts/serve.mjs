@@ -80,7 +80,7 @@ const server=http.createServer(async(req,res)=>{
       if(!actor){json(res,401,{message:'请先登录，或登录会话已过期'});return;}
       if(pathname==='/api/import/browser'||pathname==='/api/workspaces'||pathname==='/api/workspaces/delete'||pathname.startsWith('/api/data/')){
         if(pathname==='/api/workspaces/delete'&&(projectBusy||sourcesBusy||active)){json(res,409,{message:'请等待排查或配置操作完成后归档空间'});return;}
-        const input=['GET','HEAD'].includes(req.method)?null:await bodyJson(req);
+        const input=['GET','HEAD'].includes(req.method)?null:await bodyJson(req,pathname==='/api/data/investigations'?10000000:4000000);
         const scope=new URL(req.url,'http://localhost').searchParams.get('workspace')||input?.workspace;
         if(pathname==='/api/workspaces/delete')projectBusy=sourcesBusy=true;
         try{
@@ -104,7 +104,7 @@ const server=http.createServer(async(req,res)=>{
     const controller=new AbortController(),disconnect=()=>{if(!res.writableEnded)controller.abort()};res.on('close',disconnect);
     const emit=(event,data)=>{if(!res.destroyed&&!res.writableEnded)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
     try{
-      const input=await bodyJson(req,4000000),scope=workspaceKey(input.workspace);
+      const input=await bodyJson(req,10000000),scope=workspaceKey(input.workspace);
       await checkWorkspace(scope);
       if(typeof input.reportId!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(input.reportId))throw Error('排查记录标识无效');
       const report=database?await persistent.handle('/api/data/investigations/'+input.reportId,'GET',null,scope):input.report;
@@ -129,7 +129,7 @@ const server=http.createServer(async(req,res)=>{
     const controller=new AbortController(),disconnect=()=>{if(!res.writableEnded)controller.abort()};res.on('close',disconnect);
     const emit=(event,data)=>{if(!res.destroyed&&!res.writableEnded)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
     try{
-      const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>4000000){json(res,413,{message:'排查请求过大'});return;}chunks.push(chunk)}
+      const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>10000000){json(res,413,{message:'排查请求过大'});return;}chunks.push(chunk)}
       let input;try{input=JSON.parse(Buffer.concat(chunks).toString());workspaceKey(input?.workspace);await checkWorkspace(input.workspace)}catch{json(res,400,{message:'排查请求格式无效'});return;}
       res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'});res.flushHeaders();
       const report=await investigate(input,sourceStore.sources,aiConfig,emit,{signal:controller.signal,knownHostsFile});

@@ -6,7 +6,15 @@
 <div class="shell"><header><div>支付运营 <span>/</span> <b id="breadcrumb">交易排查</b></div><div class="header-right"><span class="environment" id="environment-label">测试环境</span><button id="switch-environment" type="button" class="text-button" hidden></button><span id="model-label">AI 待配置</span><button id="logout" type="button" class="text-button">退出登录</button></div></header>
 <main><section id="workbench" class="view"><div class="page-heading"><div class="eyebrow">INVESTIGATION WORKSPACE</div><h1>交易排查</h1><p>从一笔交易出发，还原每一步处理结果。</p></div>
 <section id="workspace-overview" class="workspace-overview" aria-label="业务空间概览"></section>
-<form id="investigate-form" class="query"><div class="query-fields"><label class="question-label">遇到了什么问题？<textarea id="question" required maxlength="4000" rows="2" placeholder="请直接描述遇到的问题，可带上交易流水号或订单号，例如：13_1790129888 客户已扣款，但商户仍显示处理中" autocomplete="off"></textarea></label><button class="primary" id="run" type="submit">开始排查 <span>↗</span></button></div><div class="screenshot-upload"><label>添加截图<input id="question-images" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><p>可在提问区直接粘贴截图，最多 3 张。AI 会从问题和截图中识别排查线索；有截图时可只描述画面问题。</p><div id="question-image-previews" class="screenshot-previews"></div><p id="question-image-status" role="status" aria-live="polite"></p></div><div class="samples" hidden><span>快捷查询</span><div id="samples"></div></div></form>
+<form id="investigate-form" class="query">
+<label class="question-label" for="question">遇到了什么问题？</label>
+<div class="question-composer" id="question-composer">
+<div id="question-image-previews" class="screenshot-previews"></div>
+<textarea id="question" required maxlength="4000" rows="3" aria-describedby="question-upload-hint" placeholder="描述遇到的问题，或粘贴截图…&#10;也可以带上交易流水号或订单号，帮助定位问题。" autocomplete="off"></textarea>
+<div class="composer-toolbar"><div class="composer-attachments"><button id="add-question-images" class="attachment-button" type="button" aria-label="添加截图" title="添加截图（最多 10 张）"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><input id="question-images" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden><span id="question-upload-hint">添加、粘贴或拖入截图 · 最多 10 张</span></div><button class="primary" id="run" type="submit">开始排查 <span aria-hidden="true">↑</span></button></div>
+</div>
+<p id="question-image-status" role="status" aria-live="polite"></p>
+<div class="samples" hidden><span>快捷查询</span><div id="samples"></div></div></form>
 <div id="error" role="alert" hidden></div><div id="loading" hidden><span class="spinner"></span><div><b>正在检索交易与关联日志</b><p>正在整理证据与排查报告。</p></div></div>
 <div id="empty"><div class="empty-top"><h2>数据接入</h2><span id="case-count">请先配置真实数据来源</span></div><div id="scenario-list" class="scenario-list"></div><div class="flow-band"><h3 id="flow-title">交易处理链路</h3><canvas id="flow-canvas" width="1000" height="150" aria-label="交易受理经 trx 到渠道，再通过 daemon 通知商户"></canvas><div class="flow-caption"><span id="flow-note">同步受理与异步通知分别核实</span></div></div></div>
 <div id="result" hidden></div></section>

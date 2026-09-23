@@ -61,7 +61,7 @@ $('#investigate-form').addEventListener('submit',async e=>{
     report.images=images;current=report;renderReport();
     try{await api('/investigations','POST',report,scope)}catch(e){$('#error').textContent='报告已生成，但保存失败：'+e.message+'。请先导出报告。';$('#error').hidden=false;}
   }catch(e){$('#error').textContent=controller.signal.aborted?'排查已停止':e.message;$('#error').hidden=false;$('#empty').hidden=false;}
-  finally{busy=false;investigationController=null;stop.remove();$('#run').disabled=false;$('#run').innerHTML='开始排查 <span>↗</span>';$('#loading').hidden=true;}
+  finally{busy=false;investigationController=null;stop.remove();$('#run').disabled=false;$('#run').innerHTML='开始排查 <span aria-hidden="true">↑</span>';$('#loading').hidden=true;}
 });
 function renderRealReport(r){
   $('#empty').hidden=true;$('#result').hidden=false;

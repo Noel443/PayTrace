@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {investigate} from './real-investigation.mjs';
 import {followupMessages} from './followup.mjs';
 import {modelTextStream} from './ai.mjs';
-import {reportInput} from './mysql-api.mjs';
+import {Readable} from 'node:stream';
+import {bodyJson,reportInput} from './mysql-api.mjs';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=';
@@ -14,7 +15,25 @@ const config={enabled:true,provider:'compatible',base:'https://example.test/v1',
 test('attachments reject URLs, MIME mismatch, malformed data and size/count overflow',()=>{
   assert.deepEqual(PayTraceImages.validate(images),images);
   assert.deepEqual(PayTraceImages.validate(),[]);
-  for(const value of [null,{},Array(4).fill(images[0]),[{dataUrl:'https://example.test/image.png'}],[{dataUrl:'data:image/svg+xml;base64,PHN2Zy8+'}],[{dataUrl:'data:image/jpeg;base64,'+png}],[{dataUrl:'data:image/png;base64,AAAA'}],[{dataUrl:images[0].dataUrl+'!'}],[{dataUrl:'data:image/png;base64,'+Buffer.alloc(500001).toString('base64')}]])assert.throws(()=>PayTraceImages.validate(value));
+  for(const value of [null,{},Array(11).fill(images[0]),[{dataUrl:'https://example.test/image.png'}],[{dataUrl:'data:image/svg+xml;base64,PHN2Zy8+'}],[{dataUrl:'data:image/jpeg;base64,'+png}],[{dataUrl:'data:image/png;base64,AAAA'}],[{dataUrl:images[0].dataUrl+'!'}],[{dataUrl:'data:image/png;base64,'+Buffer.alloc(500001).toString('base64')}]])assert.throws(()=>PayTraceImages.validate(value));
+});
+test('ten screenshots survive analysis, report validation and followup messages',async()=>{
+  const ten=Array.from({length:10},(_,i)=>({...images[0],name:`截图 ${i+1}.png`}));
+  const report=await investigate({...input,images:ten},[],config,()=>{},{model:async(c,m)=>{
+    assert.equal(m[1].content.filter(part=>part.type==='image_url').length,10);
+    return {status:'completed',text:'十张截图已分析'};
+  }});
+  assert.equal(reportInput(report,'card').images.length,10);
+  assert.equal(followupMessages(report,'继续检查')[1].content.filter(part=>part.type==='image_url').length,10);
+});
+test('ten maximum-size screenshots fit the report request budget',async()=>{
+  const bytes=Buffer.alloc(500000);Buffer.from('89504e470d0a1a0a','hex').copy(bytes);
+  const ten=Array(10).fill({name:'large.png',dataUrl:'data:image/png;base64,'+bytes.toString('base64')});
+  const body=JSON.stringify({...input,images:ten});
+  assert(Buffer.byteLength(body)>4000000);
+  const parsed=await bodyJson(Readable.from([Buffer.from(body)]),10000000);
+  assert.equal(PayTraceImages.validate(parsed.images).length,10);
+  await assert.rejects(bodyJson(Readable.from([Buffer.alloc(10000001)]),10000000),/过大/);
 });
 test('screenshot-only analysis skips SSH, retains images and includes original images in followups',async()=>{
   let sent;

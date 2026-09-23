@@ -1,15 +1,18 @@
 (() => {
   const picker=document.querySelector('#question-images'),previews=document.querySelector('#question-image-previews'),status=document.querySelector('#question-image-status');
+  const composer=document.querySelector('#question-composer'),addButton=document.querySelector('#add-question-images'),question=document.querySelector('#question');
   let images=[],version=0,loading=false;
+  function syncControls(){addButton.disabled=loading||busy||images.length>=PayTraceImages.maxCount;previews.querySelectorAll('button').forEach(button=>button.disabled=loading||busy);composer.setAttribute('aria-busy',String(loading));question.required=!images.length;}
   function render(){
-    status.textContent=images.length?`已添加 ${images.length} 张截图，将发送给当前模型。`:'';
+    status.textContent=images.length?`已添加 ${images.length} / ${PayTraceImages.maxCount} 张截图，将发送给当前模型。`:'';
     previews.replaceChildren();
     images.forEach((item,index)=>{
       const card=document.createElement('div');card.className='screenshot-card';
       const img=document.createElement('img');img.src=item.dataUrl;img.alt=item.name;
-      const remove=document.createElement('button');remove.type='button';remove.className='text-button';remove.textContent='移除 '+(index+1);remove.setAttribute('aria-label','移除截图 '+item.name);
+      const remove=document.createElement('button');remove.type='button';remove.className='screenshot-remove';remove.textContent='×';remove.title='移除截图 '+item.name;remove.setAttribute('aria-label','移除截图 '+item.name);
       remove.onclick=()=>{if(loading||busy)return;images.splice(index,1);render()};card.append(img,remove);previews.append(card);
     });
+    syncControls();
   }
   async function prepare(file){
     if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw Error('请选择 PNG、JPEG 或 WebP 图片');
@@ -28,12 +31,21 @@
   }
   async function add(files){
     if(loading||busy)return;
-    if(images.length+files.length>3){status.textContent='最多添加 3 张截图';return;}
-    const revision=version;loading=true;status.textContent='正在处理截图…';
-    try{const next=[];for(const file of files)next.push(await prepare(file));if(revision!==version)return;images.push(...next);render();status.textContent=`已添加 ${images.length} 张截图，将发送给当前模型。`;}
+    if(!files.length)return;
+    if(images.length+files.length>PayTraceImages.maxCount){status.textContent=`最多添加 ${PayTraceImages.maxCount} 张截图，还可添加 ${PayTraceImages.maxCount-images.length} 张`;picker.value='';return;}
+    const revision=version;loading=true;syncControls();status.textContent='正在处理截图…';
+    try{const next=[];for(const file of files)next.push(await prepare(file));if(revision!==version)return;images.push(...next);render();}
     catch(e){if(revision===version)status.textContent=e.message}
-    finally{loading=false;picker.value=''}
+    finally{loading=false;picker.value='';syncControls()}
   }
+  addButton.addEventListener('click',()=>{if(!loading&&!busy)picker.click()});
+  let dragDepth=0;
+  composer.addEventListener('dragenter',event=>{if(![...event.dataTransfer.types].includes('Files'))return;event.preventDefault();dragDepth++;composer.classList.add('is-dragging')});
+  composer.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files')){event.preventDefault();event.dataTransfer.dropEffect=loading||busy?'none':'copy'}});
+  composer.addEventListener('dragleave',()=>{if(--dragDepth<=0){dragDepth=0;composer.classList.remove('is-dragging')}});
+  composer.addEventListener('drop',event=>{event.preventDefault();dragDepth=0;composer.classList.remove('is-dragging');add([...event.dataTransfer.files])});
+  new MutationObserver(syncControls).observe(document.querySelector('#run'),{attributes:true,attributeFilter:['disabled']});
+  render();
   picker.addEventListener('change',()=>add([...picker.files]));
   document.querySelector('#investigate-form').addEventListener('paste',event=>{
     const files=[...(event.clipboardData?.items||[])].filter(item=>item.kind==='file'&&item.type.startsWith('image/')).map(item=>item.getAsFile()).filter(Boolean);

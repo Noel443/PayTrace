@@ -1,8 +1,8 @@
 /* Shared attachment limits and validation for browser previews and server requests. */
 (() => {
-  const maxCount=3,maxBytes=500000;
+  const maxCount=10,maxBytes=500000;
   function validate(value=[]){
-    if(!Array.isArray(value)||value.length>maxCount)throw Error('最多添加 3 张截图');
+    if(!Array.isArray(value)||value.length>maxCount)throw Error(`最多添加 ${maxCount} 张截图`);
     return value.map((item,index)=>{
       if(!item||typeof item.dataUrl!=='string'||item.dataUrl.length>Math.ceil(maxBytes/3)*4+40)throw Error('截图过大，每张压缩后最多 500 KB');
       const match=item.dataUrl.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
