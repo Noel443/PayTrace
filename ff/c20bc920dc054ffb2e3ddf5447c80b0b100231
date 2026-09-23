@@ -1,0 +1,53 @@
+frontend/app.js
+  s_6df0b65840810a::t_62316785106d9c 409,415
+README.md
+  s_6df0b65840810a::t_62316785106d9c 284-286,288,327
+  s_c5f62678c1df2b::t_a034b74e8f1b11 96,295
+  s_c5f62678c1df2b::t_e72ffa881e2546 97
+frontend/index.html
+  s_c5f62678c1df2b::t_e72ffa881e2546 3
+  s_c5f62678c1df2b::t_a034b74e8f1b11 5
+frontend/style.css
+  s_6df0b65840810a::t_e6a17aef2c022f 597-598,604,614-615,620
+scripts/followup.mjs
+  s_6df0b65840810a::t_e6a17aef2c022f 7,9-10,15,17-18,21,24-25,35,37
+scripts/serve.mjs
+  s_c5f62678c1df2b::t_e72ffa881e2546 45
+  s_6df0b65840810a::t_e6a17aef2c022f 83,107,115,119-120
+frontend/followup-data.js
+  s_6df0b65840810a::t_e6a17aef2c022f 6,10,12,15,18-19
+frontend/followup-ui.js
+  s_6df0b65840810a::t_62316785106d9c 25
+  s_6df0b65840810a::t_e38ed1d458f63f 11,22,24,32,34-35,37-38,47,58,65
+frontend/image-upload.js
+  s_6df0b65840810a::t_e6a17aef2c022f 2,4,12,32,40,43,46,49,53-56
+scripts/followup.test.mjs
+  s_6df0b65840810a::t_76efd43c7f80a4 8,43-44,46,48,61,63,78-111
+frontend/login.html
+  s_c5f62678c1df2b::t_a034b74e8f1b11 8
+  s_c5f62678c1df2b::t_e72ffa881e2546 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "ffc20bc920dc054ffb2e3ddf5447c80b0b100231",
+  "prompts": {},
+  "sessions": {
+    "s_6df0b65840810a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd1e-ef47-73c3-bd9b-fb21e51df261",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    },
+    "s_c5f62678c1df2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd1f-5f53-7851-822b-1c1a7a130067",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
