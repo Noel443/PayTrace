@@ -18,7 +18,7 @@ export function projectJobs({getStore,saveStore,analyze,limit=2}){
       await update(id,p=>({...p,task:structuredClone(task)}));
       const controller=new AbortController();live.set(id,controller);
       const timer=setTimeout(()=>controller.abort(Error('项目任务超过总时限')),totalSeconds*1000);
-      const emit=(event,data)=>{if(event==='delta')task.received+=data.text.length;if(event==='stage'){task.stages.push(data.message);task.stages=task.stages.slice(-100);task.message=data.message}};
+      const emit=(event,data)=>{if(event==='delta')task.received+=data.text.length;if(event==='stage'){task.phase=data.phase;task.stages.push(data.message);task.stages=task.stages.slice(-100);task.message=data.message}};
       // Progress is checkpointed, never persist the model's partial answer.
       const checkpoint=setInterval(()=>{serial(async()=>{if(runningTask(find(id,workspace).task))await update(id,p=>({...p,task:structuredClone(task)}))}).catch(()=>controller.abort(Error('任务进度保存失败')))},1000);
       Promise.resolve().then(()=>analyze(project,{...config,projectTimeoutSeconds:totalSeconds},markdown,emit,{signal:controller.signal})).then(analysis=>serial(async()=>{
@@ -28,7 +28,7 @@ export function projectJobs({getStore,saveStore,analyze,limit=2}){
         await update(id,p=>({...p,analysis,analysisStale:false,task:{...task,status:'completed',message:'业务链路已保存',finishedAt:new Date().toISOString()}}));
       })).catch(error=>serial(async()=>{
         if(find(id,workspace).task.status==='completed')return;
-        await update(id,p=>({...p,task:{...task,status:controller.signal.reason?.message==='用户已停止分析'?'cancelled':'failed',message:controller.signal.reason?.message|| (error.code?'项目操作失败，旧结果保留':error.message),finishedAt:new Date().toISOString()}}));
+        await update(id,p=>({...p,task:{...task,status:controller.signal.reason?.message==='用户已停止分析'?'cancelled':'failed',message:controller.signal.reason?.message|| (error.publicError?error.message:error.code?(task.phase==='saving'?'分析完成，但保存失败，旧结果保留':'项目处理发生内部错误，旧结果保留'):error.message),errorCode:error.publicError?error.code:error.code?'INTERNAL_ERROR':undefined,finishedAt:new Date().toISOString()}}));
       })).catch(()=>{}).finally(()=>{clearTimeout(timer);clearInterval(checkpoint);live.delete(id)});
       return {...task};
     });

@@ -67,3 +67,17 @@ test('DNS failures are actionable and do not echo address or raw diagnostics',as
     fetcher:async()=>{throw Object.assign(Error('private endpoint detail'),{code:'ENOTFOUND'})}
   }),e=>/DNS 解析失败/.test(e.message)&&!e.message.includes('private'));
 });
+
+test('partial output followed by socket reset preserves a safe actionable transport error',async t=>{
+  const base=await server(t,(req,res)=>{
+    req.resume();res.writeHead(200,{'Content-Type':'text/event-stream'});
+    res.write('data: '+JSON.stringify({choices:[{delta:{content:'x'.repeat(1904)}}]})+'\n\n');
+    const timer=setTimeout(()=>res.destroy(),30);res.on('close',()=>clearTimeout(timer));
+  });
+  let count=0;
+  await assert.rejects(modelTextStream(config(base),[],(event,data)=>{if(event==='delta')count+=data.text.length}),error=>{
+    assert.equal(error.publicError,true);assert.equal(error.retryable,true);
+    assert.match(error.message,/1904/);assert.match(error.message,/ECONNRESET|ERR_STREAM_PREMATURE_CLOSE/);return true;
+  });
+  assert.equal(count,1904);
+});

@@ -143,9 +143,19 @@ export async function analyzeProject(project,config,markdown,emit,{signal,fetche
   const batches=[];let batch=[],size=0;
   for(const d of snapshot.documents){if(batch.length&&(size+d.text.length>80000||batch.length>=20)){batches.push(batch);batch=[];size=0}batch.push(d);size+=d.text.length}if(batch.length)batches.push(batch);
   const partials=[];let result;
+  async function requestModel(messages,maxTokens){
+    for(let attempt=0;attempt<2;attempt++){
+      signal?.throwIfAborted();
+      try{return await modelTextStream({...config,timeoutSeconds:config.projectTimeoutSeconds??1800},messages,emit,{signal,fetcher,maxTokens})}
+      catch(error){
+        if(signal?.aborted||!error.retryable||attempt===1)throw error;
+        emit('stage',{phase:'retrying',message:error.message+'；丢弃本次未完成输出，仅重新请求当前批次一次（可能额外计费，总时限不延长）'});
+      }
+    }
+  }
   for(let i=0;i<batches.length;i++){
     signal?.throwIfAborted();emit('stage',{phase:'batch',message:`分析第 ${i+1}/${batches.length} 批（${batches[i].length} 个代码片段）`});
-    result=await modelTextStream({...config,timeoutSeconds:config.projectTimeoutSeconds??1800},[{role:'system',content:prompt},{role:'user',content:JSON.stringify({project:project.name,focus:project.focus,mode:snapshot.mode,documents:batches[i],instruction:'这是部分资料，每批最多 8 条链，只总结本批可证实的业务与缺口；没有可证实业务用例时 chains 和 businesses 可为空，不编造链路。支撑实现的动作在 summary 中注明证据 ID，供跨批汇总参考。'})}],emit,{signal,fetcher,maxTokens:16000});
+    result=await requestModel([{role:'system',content:prompt},{role:'user',content:JSON.stringify({project:project.name,focus:project.focus,mode:snapshot.mode,documents:batches[i],instruction:'这是部分资料，每批最多 8 条链，只总结本批可证实的业务与缺口；没有可证实业务用例时 chains 和 businesses 可为空，不编造链路。支撑实现的动作在 summary 中注明证据 ID，供跨批汇总参考。'})}],16000);
     partials.push(validateAnalysis(result.text,{documents:batches[i]},{allowEmpty:true}));
   }
   let analysis=partials[0];
@@ -154,7 +164,7 @@ export async function analyzeProject(project,config,markdown,emit,{signal,fetche
     // Bound synthesis input explicitly; never silently discard a batch.
     const content=JSON.stringify({project:project.name,focus:project.focus,partials,coverage:{read:snapshot.coverage.read,total:snapshot.coverage.total},sources:snapshot.documents.map(({text,...d})=>d)});
     if(content.length>1000000)throw Error('分批结果超过汇总上下文预算，请缩小分析范围');
-    result=await modelTextStream({...config,timeoutSeconds:config.projectTimeoutSeconds??1800},[{role:'system',content:prompt+'请合并重复场景，保留各批证据 ID；跨批调用没有直接证据时不要建立关系。'},{role:'user',content}],emit,{signal,fetcher,maxTokens:24000});
+    result=await requestModel([{role:'system',content:prompt+'请合并重复场景，保留各批证据 ID；跨批调用没有直接证据时不要建立关系。'},{role:'user',content}],24000);
     analysis=validateAnalysis(result.text,snapshot);
   }
   analysis=validateAnalysis(JSON.stringify(analysis),snapshot);

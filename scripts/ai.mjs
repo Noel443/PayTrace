@@ -1,3 +1,4 @@
+import {modelReadError,incompleteModelResponse} from './model-errors.mjs';
 import {modelFetch} from './model-transport.mjs';
 import '../frontend/limits.js';
 import {readFile} from 'node:fs/promises';
@@ -193,10 +194,9 @@ export async function modelTextStream(c,messages,emit,{fetcher=modelFetch,signal
     }
   }catch(e){
     if(requestSignal.aborted)throw Error(signal?.aborted?'分析已停止':controller.signal.reason?.message||'模型等待超时');
-    if(e.name==='TypeError')throw Error('模型连接中断，分析未完成，请重试');
-    throw e;
+    throw modelReadError(e,text.length);
   }
-  if(!finished)throw Error('模型连接提前结束，分析未完成，请重试');
+  if(!finished)throw incompleteModelResponse(text.length);
   if(!text.trim())throw Error('模型未返回可用文本，请检查模型类型或输出限制');
   return {status:'completed',model:c.model,text,notice:'真实 AI 分析 · 使用沙箱交易与所附 Markdown；结论需人工复核。',analyzedAt:new Date().toISOString()};
   }finally{clearTimeout(timer);clearTimeout(total)}
