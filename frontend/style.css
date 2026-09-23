@@ -48,8 +48,8 @@ p { color: var(--muted); font-size: 12px; line-height: 1.8; }
 .query { padding: 22px 0 17px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .query-fields { display: flex; align-items: end; gap: 16px; }
 label { display: block; font-size: 12px; font-weight: 500; color: #555c67; }
-.query-fields label:first-child { width: 238px; }
 .question-label { flex: 1; min-width: 0; }
+.question-label textarea { min-height: 42px; resize: vertical; }
 input, textarea { width: 100%; padding: 10px 11px; border: 1px solid #d6d9df; background: #fff; border-radius: 3px; outline: 0; margin-top: 8px; color: #323843; font-size: 13px; }
 input:focus, textarea:focus { border-color: #527eca; box-shadow: 0 0 0 2px #245cbe10; }
 input::placeholder { color: #949ba5; font-size: 12px; }
@@ -156,7 +156,6 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   main { padding: 28px 24px; }
   header { padding: 0 24px; }
   .query-fields { flex-wrap: wrap; }
-  .query-fields label:first-child { width: 210px; }
   .query-fields .primary { margin-left: auto; }
   .report-grid { grid-template-columns: minmax(0, 1fr) 205px; gap: 22px; }
   .report-side { padding-left: 18px; }
@@ -178,8 +177,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   h1 { font-size: 21px; }
   .page-heading { margin-bottom: 20px; }
   .query-fields { display: block; }
-  .query-fields label:first-child { width: 100%; }
-  .question-label { margin-top: 15px; }
+  .question-label { width: 100%; }
   .query-fields .primary { margin-top: 16px; width: 100%; }
   .samples { align-items: start; line-height: 1.7; }
   .samples > span { white-space: nowrap; }

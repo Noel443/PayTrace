@@ -1,9 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {investigate} from './real-investigation.mjs';
+import {investigate,identifySearchQuery} from './real-investigation.mjs';
 const input={workspace:'card',transactionId:'ORDER-1',question:'为什么超时',markdown:'业务文档'};
 const sources=[{workspace:'card',enabled:true,name:'trx',service:'trx',logPath:'/logs/trx.log',environment:'test'},{workspace:'hk-cb',enabled:true,name:'other'},{workspace:'card',enabled:false,name:'disabled'}];
 const config={enabled:true};
+test('identifies a search marker from the free-form question',()=>{
+  assert.equal(identifySearchQuery('客户说 13_1790129888 已扣款但订单仍处理中'),'13_1790129888');
+  assert.equal(identifySearchQuery('订单号：ORDER-1 为什么超时'),'ORDER-1');
+  assert.equal(identifySearchQuery('截图里显示支付失败'), '');
+});
 test('queries only enabled sources in workspace and sends matching evidence to AI',async()=>{
   const calls=[];let payload;
   const report=await investigate(input,sources,config,()=>{},{search:async(s,o)=>{calls.push(s.name);assert.equal(o.query,'ORDER-1');return {output:'10-before ORDER-2\n11:ORDER-1 timeout\n12-after ORDER-2\n13:unrelated'}},model:async(c,m)=>{payload=JSON.parse(m[1].content);return {status:'completed',text:'分析 [E1]'}}});

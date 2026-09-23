@@ -10,7 +10,6 @@
       const remove=document.createElement('button');remove.type='button';remove.className='text-button';remove.textContent='移除 '+(index+1);remove.setAttribute('aria-label','移除截图 '+item.name);
       remove.onclick=()=>{if(loading||busy)return;images.splice(index,1);render()};card.append(img,remove);previews.append(card);
     });
-    document.querySelector('#transaction-id').required=!images.length;
   }
   async function prepare(file){
     if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw Error('请选择 PNG、JPEG 或 WebP 图片');
