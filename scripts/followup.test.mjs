@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {followup,followupMessages} from './followup.mjs';
 import {mysqlApi} from './mysql-api.mjs';
-const report=()=>({id:'report-1',kind:'real',workspaceId:'card',transaction:{id:'ORDER-1'},question:'为什么失败',evidence:[{id:'E1',text:'ORDER-1 timeout'}],coverage:[{truncated:true}],ai:{status:'failed',text:'模型错误'},revision:0,feedback:{status:'已解决',note:'保留'}});
+const report=()=>({id:'report-1',kind:'real',workspaceId:'card',searchQuery:'ORDER-1',transaction:{id:'ORDER-1'},question:'为什么失败',evidence:[{id:'E1',text:'ORDER-1 timeout'}],coverage:[{truncated:true}],ai:{status:'failed',text:'模型错误'},revision:0,feedback:{status:'已解决',note:'保留'}});
 const images=[{name:'追问.png',dataUrl:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII='}];
 const turn=(id='turn-1')=>({id,question:'哪里超时',text:'请求超时 [E1]，最终状态待核实',model:'fixture',createdAt:new Date().toISOString()});
 test('followups use evidence, initial successful answer and ordered conversation, never failed answer',async()=>{
@@ -18,10 +18,10 @@ test('followups use evidence, initial successful answer and ordered conversation
   assert.equal(result.question,'继续');assert.equal(result.text,'新回答');assert.equal(r.followups.length,1);
 });
 test('context keeps whole recent turns, bounded by count and characters; original history remains',()=>{
-  const r=report();r.followups=Array.from({length:20},(_,i)=>({...turn('t'+i),question:'q'+i}));
-  assert.equal(PayTraceFollowup.context(r).omitted,8);assert.equal(PayTraceFollowup.context(r).turns[0].question,'q8');
-  r.followups.at(-1).text='x'.repeat(30000);r.followups.at(-2).text='x'.repeat(30000);
-  assert.equal(PayTraceFollowup.context(r).turns.length,1);assert.equal(r.followups.length,20);
+  const r=report();r.followups=Array.from({length:30},(_,i)=>({...turn('t'+i),question:'q'+i}));
+  assert.equal(PayTraceFollowup.context(r).omitted,6);assert.equal(PayTraceFollowup.context(r).turns[0].question,'q6');
+  r.followups.at(-1).text='x'.repeat(300000);r.followups.at(-2).text='x'.repeat(300000);
+  assert.equal(PayTraceFollowup.context(r).turns.length,1);assert.equal(r.followups.length,30);
 });
 test('invalid input, missing model, failure and cancellation do not alter conversation',async()=>{
   const r=report(),before=structuredClone(r);let called=false;
@@ -41,11 +41,13 @@ test('append is idempotent, detects stale history and evidence, preserves feedba
 test('browser persistence survives reopening, isolates workspaces, exposes quota failures',async()=>{
   const storage=new Map();let quota=false;
   const c=vm.createContext({atob,btoa,window:{workspaceCatalog:[],workspaceData:{get(){},services(){return []}}},structuredClone,localStorage:{getItem:k=>storage.get(k)||null,setItem(k,v){if(quota)throw Error('quota');storage.set(k,v)}}});
-  for(const f of ['images','followup-data','local-api'])vm.runInContext(await readFile(new URL('../frontend/'+f+'.js',import.meta.url),'utf8'),c);
+  for(const f of ['limits','images','followup-data','local-api'])vm.runInContext(await readFile(new URL('../frontend/'+f+'.js',import.meta.url),'utf8'),c);
   const api=c.window.localApi;await api('/investigations','POST',report(),'card');
-  const update={turn:{...turn(),images,logQuery:{evidence:[{id:'QE1',text:'sample exception'}],coverage:[]}},expectedCount:0,revision:0};await api('/investigations/report-1/followups','POST',update,'card');
+  const update={turn:{...turn(),question:'问题材料'.repeat(4000),text:'分析结果'.repeat(10000),images,logQuery:{evidence:[{id:'QE1',text:'sample exception'}],coverage:[]}},expectedCount:0,revision:0};await api('/investigations/report-1/followups','POST',update,'card');
   assert.equal((await api('/investigations/report-1','GET',null,'card')).followups.length,1);assert.equal((await api('/investigations/report-1','GET',null,'card')).followups[0].logQuery.evidence[0].text,'sample exception');
   assert.equal((await api('/investigations/report-1','GET',null,'card')).followups[0].images[0].dataUrl,images[0].dataUrl);
+  assert.equal((await api('/investigations/report-1','GET',null,'card')).followups[0].question,update.turn.question);
+  assert.equal((await api('/investigations/report-1','GET',null,'card')).followups[0].text,update.turn.text);
   await assert.rejects(api('/investigations/report-1/followups','POST',update,'hk-cb'),/不存在/);
   quota=true;await assert.rejects(api('/investigations/report-1/followups','POST',{...update,expectedCount:1,turn:turn('t2')},'card'),/未保存/);
   assert.equal((await api('/investigations/report-1','GET',null,'card')).followups.length,1);assert.equal((await api('/investigations/report-1','GET',null,'card')).followups[0].logQuery.evidence[0].text,'sample exception');
@@ -58,7 +60,7 @@ test('MySQL adapter appends to JSON without overwriting feedback or crossing wor
     if(sql.startsWith('UPDATE investigations')){stored=JSON.parse(args[0]);return [{affectedRows:1}]}
     assert.fail(sql);
   }})});
-  const update={turn:{...turn(),images,logQuery:{evidence:[{id:'QE1',text:'sample exception'}],coverage:[]}},expectedCount:0,revision:0},path='/api/data/investigations/report-1/followups';
+  const update={turn:{...turn(),question:'问题材料'.repeat(4000),text:'分析结果'.repeat(10000),images,logQuery:{evidence:[{id:'QE1',text:'sample exception'}],coverage:[]}},expectedCount:0,revision:0},path='/api/data/investigations/report-1/followups';
   await api.handle(path,'POST',update,'card');await api.handle(path,'POST',update,'card');
   assert.deepEqual(stored.followups[0].images,images);assert.equal(stored.followups.length,1);assert.equal(stored.followups[0].logQuery.evidence[0].text,'sample exception');assert.equal(stored.feedback.note,'保留');
   await assert.rejects(api.handle(path,'POST',{...update,turn:turn('t2')},'card'),/对话已更新/);
@@ -108,4 +110,17 @@ test('invalid followup attachments are rejected before model, log query or persi
     await assert.rejects(followup({enabled:true},report(),'补查日志','',()=>{},{images:invalid,model:()=>assert.fail('model must not run'),search:()=>assert.fail('search must not run')}));
     assert.throws(()=>PayTraceFollowup.append(report(),{turn:{...turn(),images:invalid},expectedCount:0,revision:0}));
   }
+});
+
+test('long pasted questions and followups survive saving/reopening without truncation; oversized turns fail',async()=>{
+  const question='用户日志行\n'.repeat(2500),answer='分析内容'.repeat(10000),r={...report(),question,ai:{status:'completed',text:answer}};
+  const generated=await followup({enabled:true},r,question,'',()=>{},{model:async(c,m)=>{
+    assert(m[1].content.includes(question.replaceAll('\n','\\n')));assert.equal(m.at(-1).content,question.trim());return {text:answer,model:'mock'};
+  }});
+  PayTraceFollowup.append(r,{turn:generated,expectedCount:0,revision:0});
+  const reopened=JSON.parse(JSON.stringify(r));
+  assert.equal(reopened.question,question);assert.equal(reopened.followups[0].text,answer);
+  assert.equal(followupMessages(reopened,'继续').at(-3).content,question.trim());
+  assert.throws(()=>followupMessages(r,'x'.repeat(200001)),/200000/);
+  assert.throws(()=>PayTraceFollowup.append(r,{turn:{...turn('too-long'),question:'x'.repeat(200001)},expectedCount:1}),/格式无效/);
 });

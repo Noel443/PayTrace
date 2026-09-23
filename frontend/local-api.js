@@ -35,7 +35,7 @@
       if(ids.some(id=>!reports.some(r=>r.id===id)))throw Error('部分排查记录已不存在，请刷新列表后重试');
       const selected=new Set(ids);save('reports',reports.filter(r=>!selected.has(r.id)),workspace);return {deleted:ids.length};
     }
-    if(path==='/investigations'){if(method==='POST'){if(body?.kind!=='real'||body.workspaceId!==workspace||!body.id)throw Error('排查报告格式无效');const reports=read('reports',[],workspace);save('reports',[body,...reports.filter(r=>r.id!==body.id)],workspace);return body;}return read('reports',[],workspace);}
+    if(path==='/investigations'){if(method==='POST'){PayTraceReportCapacity(body);if(body?.kind!=='real'||body.workspaceId!==workspace||!body.id)throw Error('排查报告格式无效');const reports=read('reports',[],workspace);save('reports',[body,...reports.filter(r=>r.id!==body.id)],workspace);return body;}return read('reports',[],workspace);}
     const followupMatch=path.match(/^\/investigations\/([^/]+)\/followups$/);
     if(followupMatch&&method==='POST'){
       const reports=read('reports',[],workspace),report=reports.find(r=>r.id===followupMatch[1]);if(!report)throw Error('排查记录不存在');
@@ -44,7 +44,7 @@
     const aiMatch=path.match(/^\/investigations\/([^/]+)\/ai$/);
     if(aiMatch&&method==='POST'){
       const reports=read('reports',[],workspace),report=reports.find(r=>r.id===aiMatch[1]);if(!report)throw Error('排查记录不存在');
-      if(body?.status!=='completed'||typeof body.text!=='string'||body.text.length>30000)throw Error('AI 分析结果格式无效');
+      if(body?.status!=='completed'||typeof body.text!=='string'||body.text.length>PayTraceLimits.answer)throw Error('AI 分析结果格式无效');
       if((body.revision??0)!==(report.revision??0))throw Error('证据已更新，本次 AI 结果已过期，请重新分析');
       report.ai=body;
       try{localStorage.setItem(storageKey('reports',workspace),JSON.stringify(reports))}catch{throw Error('AI 已返回，但浏览器存储失败，请检查剩余空间后重试')}

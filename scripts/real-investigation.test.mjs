@@ -14,9 +14,9 @@ test('queries only enabled sources in workspace and sends matching evidence to A
   const report=await investigate(input,sources,config,()=>{},{search:async(s,o)=>{calls.push(s.name);assert.equal(o.query,'ORDER-1');return {output:'10-before ORDER-2\n11:ORDER-1 timeout\n12-after ORDER-2\n13:unrelated'}},model:async(c,m)=>{payload=JSON.parse(m[1].content);return {status:'completed',text:'分析 [E1]'}}});
   assert.deepEqual(calls,['trx','trx','trx','trx','trx']);assert.equal(report.kind,'real');assert.equal(report.evidence.length,1);assert.equal(report.evidence[0].line,11);assert.match(payload.evidence[0].context,/12: after ORDER-2/);assert.equal(payload.markdown,'业务文档');assert.equal(report.ai.status,'completed');
 });
-test('no evidence avoids AI call and reports server failure',async()=>{
-  const report=await investigate(input,sources,config,()=>{},{search:async()=>{throw Error('连接失败')},model:async()=>assert.fail('must not call AI')});
-  assert.equal(report.ai.status,'disabled');assert.equal(report.coverage[0].status,'failed');
+test('no evidence still analyzes user materials and reports server failure',async()=>{
+  const report=await investigate(input,sources,config,()=>{},{search:async()=>{throw Error('连接失败')},model:async()=>({status:'completed',text:'仅依据用户材料'})});
+  assert.equal(report.ai.status,'completed');assert.equal(report.coverage[0].status,'failed');
 });
 test('partial failures retain evidence and model errors retain report',async()=>{
   const report=await investigate(input,[sources[0],{...sources[0],name:'failed'}],config,()=>{},{search:async s=>{if(s.name==='failed')throw Error('timeout');return {output:'1:ORDER-1 pending',truncated:true}},model:async()=>{throw Error('model unavailable')}});
@@ -26,7 +26,7 @@ test('validation and cancellation prevent remote work',async()=>{
   const options={search:async()=>assert.fail('must not query')};
   await assert.rejects(investigate({...input,transactionId:'a\nb'},sources,config,()=>{},options));
   await assert.rejects(investigate(input,sources,{enabled:false},()=>{},options));
-  await assert.rejects(investigate(input,[],config,()=>{},options));
+  await assert.rejects(investigate({...input,question:'x'.repeat(200001)},[],config,()=>{},options),/过长/);
   await assert.rejects(investigate(input,sources,config,()=>{},{...options,signal:AbortSignal.abort()}));
 });
 test('bounds evidence and discloses omitted lines',async()=>{

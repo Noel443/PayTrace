@@ -38,8 +38,10 @@ if(transactions.length)choose(transactions[0].id);else{$('#question').value='';$
 const status=await api('/status');if(scope!==workspaceId||version!==workspaceViewVersion)return;$('#model-label').textContent=status.enabled?'AI 已配置 · '+status.model:'AI 待配置';drawFlow()}catch(e){$('#error').textContent=e.message;$('#error').hidden=false}}
 let investigationController=null;
 window.addEventListener('paytrace:logout',()=>investigationController?.abort());
+PayTraceQuestionInput($('#question'));
 $('#investigate-form').addEventListener('submit',async e=>{
   e.preventDefault();if(busy)return;
+  if($('#question').value.length>PayTraceLimits.question){toast('问题最多 20 万字符，请缩短后重试');return}
   let images;try{images=window.questionImages?.get()||[]}catch(error){toast(error.message);return;}
   const scope=workspaceId,controller=new AbortController();investigationController=controller;
   busy=true;$('#run').disabled=true;$('#run').textContent='排查中…';$('#loading').hidden=false;$('#error').hidden=true;$('#result').hidden=true;$('#empty').hidden=true;
@@ -65,7 +67,7 @@ $('#investigate-form').addEventListener('submit',async e=>{
 });
 function renderRealReport(r){
   $('#empty').hidden=true;$('#result').hidden=false;
-  $('#result').innerHTML=`<div class="result-heading"><div><h2>${esc(r.title)}</h2><p>${esc(r.workspaceName)} · ${esc(r.transaction.id)} · ${(r.durationMs/1000).toFixed(1)} 秒</p></div><button class="text-button" id="export-real">导出排查单</button></div><div class="section-title"><h2>AI 排查结果</h2><span>${esc(r.ai.model||({disabled:'未调用 AI',failed:'AI 调用失败'}[r.ai.status]||''))}</span></div><div class="ai-text" style="white-space:pre-wrap">${esc(r.ai.text)}</div><p>查询仅覆盖所配置的日志文件，每个文件最多匹配 20 处；关键词匹配仍需核实交易关联。金额及业务状态以业务系统为准。</p><div class="section-title"><h2>日志查询覆盖</h2></div>${r.coverage.map(c=>`<p><b>${esc(c.source)} · ${esc(c.environment)} · ${esc(c.file||'')}</b>：${c.status==='failed'?'查询失败 · '+esc(c.message):'取得 '+c.matches+' 条证据'+(c.truncated?' · 返回内容已截断':'')+(c.omitted?' · '+c.omitted+' 条因报告容量限制未纳入':'')+(c.attempts?' · 扩展范围 '+esc(c.attempts.join(' → '))+' 行':'')+(c.stopReason?' · '+esc(c.stopReason):'')+(c.contextError?' · '+esc(c.contextError):'')}</p>`).join('')}<div class="section-title"><h2>日志证据</h2><span>${r.evidence.length} 条关键词匹配记录</span></div>${r.evidence.map(e=>`<details class="evidence"><summary><span class="tag">${esc(e.id)}</span><b>${esc(e.source)} · ${esc(e.service)} · ${esc(e.environment)}</b><span>${esc(e.file)}:${e.line}</span></summary><pre>${esc(e.text)}</pre>${e.context?`<p>附近原文（需核实交易关联）</p><pre>${esc(e.context)}</pre>`:''}</details>`).join('')}${realFeedbackPanel(r)}`;
+  $('#result').innerHTML=`<div class="result-heading"><div><h2>${esc(r.title)}</h2><p>${esc(r.workspaceName)} · ${esc(r.transaction.id)} · ${(r.durationMs/1000).toFixed(1)} 秒</p></div><button class="text-button" id="export-real">导出排查单</button></div><div class="section-title"><h2>AI 排查结果</h2><span>${esc(r.ai.model||({disabled:'未调用 AI',failed:'AI 调用失败'}[r.ai.status]||''))}</span></div><div class="ai-text" style="white-space:pre-wrap">${esc(r.ai.text)}</div><details><summary>用户提供的问题／粘贴材料（未经服务器查询核实）</summary><pre>${esc(r.question)}</pre></details><p>${r.evidence.length?'以下证据来自实际服务器查询。':'本次没有取得服务器日志证据，仅依据用户材料分析。'}</p><p>查询仅覆盖所配置的日志文件，每个文件最多匹配 20 处；关键词匹配仍需核实交易关联。金额及业务状态以业务系统为准。</p><div class="section-title"><h2>日志查询覆盖</h2></div>${r.coverage.map(c=>`<p><b>${esc(c.source)} · ${esc(c.environment)} · ${esc(c.file||'')}</b>：${c.status==='failed'?'查询失败 · '+esc(c.message):'取得 '+c.matches+' 条证据'+(c.truncated?' · 返回内容已截断':'')+(c.omitted?' · '+c.omitted+' 条因报告容量限制未纳入':'')+(c.attempts?' · 扩展范围 '+esc(c.attempts.join(' → '))+' 行':'')+(c.stopReason?' · '+esc(c.stopReason):'')+(c.contextError?' · '+esc(c.contextError):'')}</p>`).join('')}<div class="section-title"><h2>日志证据</h2><span>${r.evidence.length} 条关键词匹配记录</span></div>${r.evidence.map(e=>`<details class="evidence"><summary><span class="tag">${esc(e.id)}</span><b>${esc(e.source)} · ${esc(e.service)} · ${esc(e.environment)}</b><span>${esc(e.file)}:${e.line}</span></summary><pre>${esc(e.text)}</pre>${e.context?`<p>附近原文（需核实交易关联）</p><pre>${esc(e.context)}</pre>`:''}</details>`).join('')}${realFeedbackPanel(r)}`;
   renderScreenshotReport(r);
   renderFollowup(r);
   bindRealFeedback(r);
@@ -217,7 +219,7 @@ async function runAi(report){
         if(data.model&&$('#ai-result-state'))$('#ai-result-state').textContent='分析中 · '+data.model;
       }
       if(event.event==='delta'){
-        if(typeof data.text!=='string'||text.length+data.text.length>30000)throw Error('AI 输出格式或长度无效');
+        if(typeof data.text!=='string'||text.length+data.text.length>PayTraceLimits.answer)throw Error('AI 输出格式或长度无效');
         text+=data.text;
         output.innerHTML=aiTextWithReferences({...report,ai:{text}});
         const headings=['已确认事实','可能原因','待核实事项','运营下一步'];
@@ -259,8 +261,7 @@ async function runAi(report){
 let loadedModel=null,modelStore={activeId:null,providers:[]},modelBusy=false,modelLoadVersion=0;
 async function modelRequest(endpoint,method='GET',body){
   if(location.protocol==='file:')throw Error('请运行 npm start，并通过 http://127.0.0.1:5173 配置模型');
-  const testSeconds=body?.savedOnly?(modelStore.providers.find(p=>p.id===body.id)?.timeoutSeconds??300):(body?.timeoutSeconds??300);
-  const timeoutMs=endpoint==='test'?Number(testSeconds)*1000+5000:65000;
+  const timeoutMs=65000;
   const response=await fetch('/api/ai/'+endpoint,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(timeoutMs)});
   let data;try{data=await response.json()}catch{throw Error('本地模型服务不可用，请重启 npm start')}
   if(!response.ok)throw Error(data.message||'模型配置请求失败');return data;
@@ -324,7 +325,7 @@ $('#model-form').addEventListener('input',()=>$('#model-feedback').textContent='
 async function submitModel(test){
   if(modelBusy||!$('#model-form').reportValidity())return;
   const body={action:'save',id:loadedModel?.id,name:$('#ai-name').value,provider:$('#ai-provider').value,base:$('#ai-base').value,model:$('#ai-model').value,timeoutSeconds:Number($('#ai-timeout').value),key:$('#ai-key').value,clearKey:$('#ai-clear').checked,activate:$('#ai-activate').checked};
-  modelControls(true);$('#model-feedback').textContent=test?'正在测试连接，最长等待约 '+body.timeoutSeconds+' 秒…':'正在保存服务商配置…';
+  modelControls(true);$('#model-feedback').textContent=test?'正在测试连接，最长等待约 60 秒…':'正在保存服务商配置…';
   try{
     const result=await modelRequest(test?'test':'providers','POST',body);
     if(test)$('#model-feedback').textContent=result.message;
@@ -341,7 +342,7 @@ $('#provider-list').addEventListener('click',async e=>{
   const entry=modelStore.providers.find(p=>p.id===id);
   if(!entry)return;
   if(action==='delete'&&!confirm('删除服务商“'+entry.name+'”及其已保存密钥？'+(id===modelStore.activeId?'删除当前服务后，AI 将处于未启用状态，需手动启用其他服务。':'')))return;
-  modelControls(true);$('#provider-feedback').textContent=action==='test'?'正在测试“'+entry.name+'”，最长等待约 '+(entry.timeoutSeconds??300)+' 秒…':'正在更新配置…';
+  modelControls(true);$('#provider-feedback').textContent=action==='test'?'正在测试“'+entry.name+'”，最长等待约 60 秒…':'正在更新配置…';
   try{
     const result=await modelRequest(action==='test'?'test':'providers','POST',action==='test'?{id,savedOnly:true}:{id,action});
     if(action==='test')$('#provider-feedback').textContent=entry.name+'：'+result.message;

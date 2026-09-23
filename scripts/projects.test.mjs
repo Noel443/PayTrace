@@ -64,8 +64,8 @@ test('repository coverage and excerpt bounds are explicit',async t=>{
   for(let i=0;i<30;i++)await writeFile(path.join(repo,'Service'+i+'.java'),'// business\n'.repeat(1000));
   await git('add','.');await git('-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','-m','bounded fixture');
   const snapshot=await projectSnapshot({...base,repoPath:repo,scanEnabled:true});
-  assert.equal(snapshot.coverage.total,30);assert(snapshot.coverage.read<=24);assert.equal(snapshot.coverage.truncated,true);
-  assert(snapshot.documents.every(d=>d.text.length<=7000));assert(snapshot.documents.reduce((n,d)=>n+d.text.length,0)<=90000);
+  assert.equal(snapshot.coverage.total,30);assert(snapshot.coverage.read===30);assert.equal(snapshot.coverage.truncated,false);
+  assert(snapshot.documents.every(d=>d.text.length<=18000));assert(snapshot.documents.reduce((n,d)=>n+d.text.length,0)<=2400000);
 });
 test('model output requires structure and real source IDs, and rejects empty or fabricated chains',async()=>{
   const snapshot=await projectSnapshot(base,'# 业务文档');
@@ -78,9 +78,9 @@ test('model output requires structure and real source IDs, and rejects empty or 
 });
 test('project analysis uses configured streaming model and retains provenance without persisting source text',async()=>{
   const events=[],c=config({AI_PROVIDER:'ollama',AI_MODEL:'fixture-project'});
-  const result=await analyzeProject({...base,revision:2},c,'# 业务专属文档内容',(kind,value)=>events.push({kind,value}),{fetcher:async(url,options)=>{
+  const result=await analyzeProject({...base,revision:2},c,'# 业务专属文档内容',(kind,value)=>events.push({kind,value}),{fetcher:async(url,options)=>{if(url.endsWith('/api/show'))return Response.json({model_info:{'mock.context_length':262144}});
     assert.equal(url,'http://127.0.0.1:11434/api/chat');
-    const body=JSON.parse(options.body);assert.equal(body.stream,true);assert.equal(body.options.num_predict,7000);
+    const body=JSON.parse(options.body);assert.equal(body.stream,true);assert.equal(body.options.num_predict,16000);
     assert(body.messages[1].content.includes('业务专属文档内容'));assert(body.messages[0].content.includes('状态变化'));assert(body.messages[0].content.includes('异步边'));assert(body.messages[0].content.includes('从业务入口'));
     return new Response(JSON.stringify({message:{content:JSON.stringify(answer)},done:true})+'\n',{headers:{'Content-Type':'application/x-ndjson'}});
   }});
@@ -98,4 +98,43 @@ test('project delete removes its saved analysis, persists and rejects cross-work
   const file=path.join(await temp(t),'projects.json');await writeProjects(file,next);
   assert.equal(publicProjects(await readProjects(file),'card').length,0);
   assert.equal(publicProjects(await readProjects(file),'hk-cb').length,1);
+});
+
+test('multiple batches and synthesis preserve source IDs and exact line ranges including file tails',async t=>{
+  const repo=await temp(t),git=async(...args)=>exec('git',['-C',repo,...args]);
+  await git('init','-b','master');
+  for(let i=0;i<35;i++)await writeFile(path.join(repo,'Payment'+i+'Service.java'),Array.from({length:1600},(_,line)=>'// source '+i+' line '+(line+1)).join('\n'));
+  await git('add','.');await git('-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','-m','batch fixture');
+  const snapshot=await projectSnapshot({...base,repoPath:repo,scanEnabled:true});
+  assert.equal(snapshot.coverage.read,35);assert(snapshot.documents.some(d=>d.startLine>1000));
+  for(const d of snapshot.documents){
+    const lines=(await readFile(path.join(repo,d.file),'utf8')).split('\n');
+    assert.equal(d.text,lines.slice(d.startLine-1,d.endLine).join('\n'));
+  }
+  let batches=0,summaries=0;
+  const result=await analyzeProject({...base,repoPath:repo,scanEnabled:true},config({AI_PROVIDER:'ollama',AI_MODEL:'mock'}),'',()=>{},{fetcher:async(url,options)=>{if(url.endsWith('/api/show'))return Response.json({model_info:{'mock.context_length':262144}});
+    const payload=JSON.parse(JSON.parse(options.body).messages[1].content);
+    let ids;if(payload.documents){batches++;ids=[payload.documents[0].id]}else{summaries++;ids=[payload.sources[0].id]}
+    const output={...answer,chains:[{...answer.chains[0],steps:[{...answer.chains[0].steps[0],evidenceIds:ids}]}]};
+    return new Response(JSON.stringify({message:{content:JSON.stringify(output)},done:true})+'\n');
+  }});
+  assert(batches>1);assert.equal(summaries,1);assert.equal(result.coverage.batches,batches);
+  assert(result.sources.every(s=>!('text' in s)));assert.equal(result.coverage.truncated,true);
+});
+
+test('thousands of candidates disclose file-budget omissions instead of claiming whole-repository coverage',async t=>{
+  const repo=await temp(t),git=async(...args)=>exec('git',['-C',repo,...args]);
+  await git('init','-b','master');
+  for(let i=0;i<2566;i++)await writeFile(path.join(repo,'Item'+i+'.java'),'class Item'+i+' {}');
+  await git('add','.');await git('-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','-m','coverage fixture');
+  const snapshot=await projectSnapshot({...base,repoPath:repo,scanEnabled:true});
+  assert.equal(snapshot.coverage.total,2566);assert.equal(snapshot.coverage.read,400);
+  assert.equal(snapshot.coverage.omissions.length,2166);assert.equal(snapshot.coverage.truncated,true);
+  assert(snapshot.coverage.omissions.every(o=>o.reason.includes('预算')));
+});
+
+test('support-only batches may have no business chains but final analysis must contain a grounded use case',async()=>{
+  const snapshot=await projectSnapshot(base,'support code'),empty={summary:'只有支撑资料 P1',businesses:[],chains:[],uncertainties:['入口未提供']};
+  assert.equal(validateAnalysis(JSON.stringify(empty),snapshot,{allowEmpty:true}).chains.length,0);
+  assert.throws(()=>validateAnalysis(JSON.stringify(empty),snapshot),/数量或结构/);
 });

@@ -1,3 +1,4 @@
+import '../frontend/limits.js';
 import '../frontend/followup-data.js';
 import '../frontend/images.js';
 import {randomUUID,randomBytes,createHash,scrypt as scryptCallback,timingSafeEqual} from 'node:crypto';
@@ -23,6 +24,7 @@ export function knowledgeInput(body){
   return {scanEnabled:body.scanEnabled,projects,markdown:body.markdown,updatedAt:new Date().toISOString()};
 }
 export function reportInput(body,scope){
+  PayTraceReportCapacity(body);
   try{PayTraceImages.validate(body?.images)}catch(e){fail(e.message)}
   if(!body||body.kind!=='real'||body.workspaceId!==scope||typeof body.id!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(body.id)||typeof body.transaction?.id!=='string'||body.transaction.id.length>200||!Array.isArray(body.evidence)||!Array.isArray(body.coverage)||!body.ai||typeof body.ai.text!=='string'||!Number.isFinite(Date.parse(body.createdAt))||!Number.isInteger(body.revision??0)||(body.revision??0)<0||(body.revision??0)>4294967295)fail('排查报告格式无效');
   if(body.feedback?.status&&!['已解决','需要开发介入','判断不正确'].includes(body.feedback.status))fail('反馈状态无效');
@@ -118,7 +120,7 @@ export function mysqlApi(db){
       }else if(match[3]==='followups'){
         try{PayTraceFollowup.append(report,input)}catch(e){fail(e.message,409)}
       }else{
-        if(input?.status!=='completed'||typeof input.text!=='string'||input.text.length>30000)fail('AI 结果格式无效');
+        if(input?.status!=='completed'||typeof input.text!=='string'||input.text.length>PayTraceLimits.answer)fail('AI 结果格式无效');
         if((input.revision??0)!==(report.revision??0))fail('证据已更新，请重新分析',409);report.ai=input;
       }
       await conn.execute('UPDATE investigations SET payload=?,feedback_status=? WHERE workspace_id=? AND id=?',[JSON.stringify(report),report.feedback?.status||null,scope,match[1]]);return report;

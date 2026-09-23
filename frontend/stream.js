@@ -14,16 +14,16 @@
       if(!value){await dispatch();return;}
       if(value.startsWith('data:'))data.push(value.slice(5).replace(/^ /,''));
       else if(value.startsWith('event:'))event=value.slice(6).trim();
-      if(data.reduce((n,s)=>n+s.length,0)>131072)throw Error('模型事件内容过大');
+      if(data.reduce((n,s)=>n+s.length,0)>4000000)throw Error('模型事件内容过大');
     }
     try{
       while(!stopped){
         const {done,value}=await reader.read();
-        total+=value?.byteLength||0;if(total>2000000)throw Error('模型响应过大');
+        total+=value?.byteLength||0;if(total>16000000)throw Error('模型响应过大');
         buffer+=done?decoder.decode():decoder.decode(value,{stream:true});
         let end;
         while((end=buffer.indexOf('\n'))!==-1&&!stopped){const current=buffer.slice(0,end).replace(/\r$/,'');buffer=buffer.slice(end+1);await line(current);}
-        if(buffer.length>131072)throw Error('模型响应行过长');
+        if(buffer.length>4000000)throw Error('模型响应行过长');
         if(done){if(buffer&&!stopped)await line(buffer.replace(/\r$/,''));if(!stopped&&format!=='ndjson')await dispatch();break;}
       }
     }finally{try{await reader.cancel()}catch{}reader.releaseLock();}

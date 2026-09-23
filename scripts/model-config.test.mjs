@@ -8,7 +8,7 @@ import {readFile} from 'node:fs/promises';
 import {candidate,publicConfig,writeConfig,readConfig,isLocalConfigRequest} from './model-config.mjs';
 
 const original={provider:'compatible',base:'https://example.test/v1',model:'demo',key:'private-key',enabled:true};
-test('browser model tests use the selected saved or draft timeout with a response grace period',async()=>{
+test('browser connection tests use a separate sixty-second deadline and response grace period',async()=>{
   const source=await readFile(new URL('../frontend/app.js',import.meta.url),'utf8'),durations=[];
   const context=vm.createContext({location:{protocol:'http:'},modelStore:{providers:[{id:'slow',timeoutSeconds:900},{id:'legacy'}]},AbortSignal:{timeout:ms=>{durations.push(ms);return new AbortController().signal}},fetch:async()=>({ok:true,json:async()=>({message:'已连接'})})});
   vm.runInContext(source.slice(source.indexOf('async function modelRequest('),source.indexOf('function renderProviders(')),context);
@@ -17,7 +17,7 @@ test('browser model tests use the selected saved or draft timeout with a respons
   await context.modelRequest('test','POST',{id:'legacy',savedOnly:true});
   await context.modelRequest('test','POST',{timeoutSeconds:3600});
   await context.modelRequest('providers','GET');
-  assert.deepEqual(durations,[905000,35000,305000,3605000,65000]);
+  assert.deepEqual(durations,[65000,65000,65000,65000,65000]);
 });
 test('retain key only for same endpoint, replace and explicitly clear',()=>{
   const input={provider:original.provider,base:original.base,model:'new-model',key:''};

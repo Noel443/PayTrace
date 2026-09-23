@@ -57,7 +57,7 @@ test('screenshots allow analysis without sources and after failed log queries',a
 test('compatible and Ollama transports send image bytes in their native message formats',async()=>{
   const messages=[{role:'user',content:PayTraceImages.content('请看图',images)}];
   for(const provider of ['compatible','ollama']){
-    const result=await modelTextStream({...config,provider},messages,()=>{},{fetcher:async(url,options)=>{
+    const result=await modelTextStream({...config,provider},messages,()=>{},{fetcher:async(url,options)=>{if(url.endsWith('/api/show'))return Response.json({model_info:{'mock.context_length':262144}});
       const request=JSON.parse(options.body),message=request.messages[0];
       if(provider==='ollama'){assert(url.endsWith('/api/chat'));assert.equal(message.content,'请看图');assert.deepEqual(message.images,[png]);return new Response(JSON.stringify({message:{content:'看到了'},done:true})+'\n',{headers:{'Content-Type':'application/x-ndjson'}})}
       assert(url.endsWith('/chat/completions'));assert.equal(message.content[1].image_url.url,images[0].dataUrl);return Response.json({choices:[{message:{content:'看到了'}}]});
@@ -69,6 +69,7 @@ test('compatible and Ollama transports send image bytes in their native message 
 test('local report reopening and feedback preserve screenshots; quota failures are surfaced',async()=>{
   const storage=new Map();let quota=false;
   const context=vm.createContext({window:{workspaceCatalog:[{id:'card'}],workspaceData:{get:()=>({id:'card'}),services:()=>[]}},structuredClone,Date,JSON,localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>{if(quota)throw Error('quota');storage.set(key,value)}}});
+  vm.runInContext(await readFile(new URL('../frontend/limits.js',import.meta.url),'utf8'),context);
   const source=await readFile(new URL('../frontend/local-api.js',import.meta.url),'utf8');vm.runInContext(source,context);
   const report=await investigate(input,[],config,()=>{},{model:async()=>({status:'completed',text:'ok'})});
   await context.window.localApi('/investigations','POST',report,'card');vm.runInContext(source,context);

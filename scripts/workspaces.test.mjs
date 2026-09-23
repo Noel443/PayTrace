@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 function setup(){
   const storage=new Map();let fail=false;
   const context=vm.createContext({window:{},structuredClone,localStorage:{getItem:k=>storage.get(k)??null,removeItem:k=>{if(fail)throw Error('quota');storage.delete(k)},setItem:(k,v)=>{if(fail)throw Error('quota');storage.set(k,v)}}});
-  const load=()=>{for(const file of ['workspaces','local-api'])vm.runInContext(readFileSync(new URL(`../frontend/${file}.js`,import.meta.url),'utf8'),context)};
+  const load=()=>{for(const file of ['limits','workspaces','local-api'])vm.runInContext(readFileSync(new URL(`../frontend/${file}.js`,import.meta.url),'utf8'),context)};
   const seed=(id,workspace='card')=>{const key='paytrace.frontend.v1.'+(workspace==='card'?'':workspace+'.')+'reports';const report={id,transaction:{id:'REAL-'+id},feedback:{},ai:{status:'disabled'}};storage.set(key,JSON.stringify([report,...JSON.parse(storage.get(key)||'[]')]));return report;};
   load();return {context,storage,load,seed,fail:()=>fail=true,api:(path,method,body,workspace)=>context.window.localApi(path,method,body,workspace)};
 }
