@@ -104,7 +104,7 @@ const server=http.createServer(async(req,res)=>{
     const controller=new AbortController(),disconnect=()=>{if(!res.writableEnded)controller.abort()};res.on('close',disconnect);
     const emit=(event,data)=>{if(!res.destroyed&&!res.writableEnded)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
     try{
-      const input=await bodyJson(req,1500000),scope=workspaceKey(input.workspace);
+      const input=await bodyJson(req,4000000),scope=workspaceKey(input.workspace);
       await checkWorkspace(scope);
       if(typeof input.reportId!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(input.reportId))throw Error('排查记录标识无效');
       const report=database?await persistent.handle('/api/data/investigations/'+input.reportId,'GET',null,scope):input.report;
@@ -129,14 +129,15 @@ const server=http.createServer(async(req,res)=>{
     const controller=new AbortController(),disconnect=()=>{if(!res.writableEnded)controller.abort()};res.on('close',disconnect);
     const emit=(event,data)=>{if(!res.destroyed&&!res.writableEnded)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
     try{
-      const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>450000){json(res,413,{message:'排查请求过大'});return;}chunks.push(chunk)}
+      const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>4000000){json(res,413,{message:'排查请求过大'});return;}chunks.push(chunk)}
       let input;try{input=JSON.parse(Buffer.concat(chunks).toString());workspaceKey(input?.workspace);await checkWorkspace(input.workspace)}catch{json(res,400,{message:'排查请求格式无效'});return;}
       res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'});res.flushHeaders();
       const report=await investigate(input,sourceStore.sources,aiConfig,emit,{signal:controller.signal,knownHostsFile});
       report.environment=environment;
       controller.signal.throwIfAborted();
       if(database)try{await database.transaction(async conn=>{const [[w]]=await conn.execute('SELECT id FROM workspaces WHERE id=? AND deleted_at IS NULL FOR UPDATE',[input.workspace]);if(!w)throw Error();await insertReport(conn,report,input.workspace)})}catch{throw Error('排查完成但数据库保存失败，请检查连接后重试')}
-      emit('done',{report});res.end();
+      // The browser already holds these images; keep the SSE event within its text limit.
+      emit('done',{report:{...report,images:undefined}});res.end();
     }catch(e){if(!res.destroyed){if(res.headersSent){emit('error',{message:e.message});res.end()}else json(res,500,{message:e.message})}}
     finally{active--;res.off('close',disconnect)}return;
   }

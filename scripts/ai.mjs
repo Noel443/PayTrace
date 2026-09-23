@@ -93,6 +93,8 @@ function modelServiceError(error){
 export async function modelTextStream(c,messages,emit,{fetcher=fetch,signal,maxTokens=1800}={}){
   if(!c.enabled)throw Error('请先在模型服务商中启用有效的 AI 连接');
   const ollama=c.provider==='ollama';
+  const hasImages=messages.some(m=>Array.isArray(m.content)&&m.content.some(p=>p.type==='image_url'));
+  if(ollama)messages=messages.map(m=>Array.isArray(m.content)?{...m,content:m.content.filter(p=>p.type==='text').map(p=>p.text).join('\n'),images:m.content.filter(p=>p.type==='image_url').map(p=>p.image_url.url.split(',')[1])}:m);
   const timeoutSeconds=analysisTimeoutSeconds(c.timeoutSeconds);
   const timeout=AbortSignal.timeout(timeoutSeconds*1000),requestSignal=signal?AbortSignal.any([signal,timeout]):timeout;
   emit('stage',{phase:'connecting',message:'正在连接 '+c.model+'，本次分析最多等待 '+timeoutSeconds+' 秒',model:c.model});
@@ -106,6 +108,7 @@ export async function modelTextStream(c,messages,emit,{fetcher=fetch,signal,maxT
   }catch{throw Error(signal?.aborted?'分析已停止':`模型连接失败或超过 ${timeoutSeconds} 秒，请检查模型服务`);}
   if(!response.ok){
     await response.body?.cancel();
+    if(hasImages&&[400,404,415,422].includes(response.status))throw Error('图片分析失败（HTTP '+response.status+'），请确认当前模型及接口支持图片输入，或减少截图后重试');
     throw Error([401,403].includes(response.status)?'模型认证或权限失败，请检查 API Key 和模型权限':response.status===429?'模型服务限流或额度不足，请稍后重试':'模型服务返回错误（HTTP '+response.status+'），请核对接口地址与模型名');
   }
   let text='',finished=false;

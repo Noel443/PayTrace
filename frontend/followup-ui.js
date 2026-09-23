@@ -15,7 +15,7 @@ function refreshFollowupReport(report){
 function renderFollowup(r){
   const pending=pendingFollowups.get(r.id),history=PayTraceFollowup.context(r);
   const section=document.createElement('section');section.className='followup-panel';section.id='followup-panel';
-  section.innerHTML=`<div class="section-title"><h2>继续追问</h2><span>围绕本次交易继续排查</span></div><p>结合本次日志、当前已保存的业务文档和最近对话回答。追问不会重新查询日志；需要最新日志时，请点击「重新查询并分析」。${history.omitted?'较早的 '+history.omitted+' 轮对话仍保留在报告中，本次未加入模型上下文。':''}</p><div id="followup-history">${(r.followups||[]).map(t=>followupTurnHtml(t)).join('')}${pending?followupTurnHtml(pending.turn,true):''}</div><form id="followup-form"><label for="followup-question">继续问 AI</label><textarea id="followup-question" rows="3" maxlength="4000" required placeholder="例如：哪条日志能证明这个原因？接下来具体要检查什么？" ${pending?'disabled':''}></textarea><div class="model-actions"><button class="primary" id="followup-send" type="submit" ${pending?'disabled':''}>发送追问</button><button class="text-button" id="followup-stop" type="button" hidden>停止回答</button><button class="text-button" id="followup-save" type="button" ${pending?'':'hidden'}>重试保存</button></div><p id="followup-status" role="status">${pending?'回答尚未保存，请重试保存或先导出报告。':''}</p><div id="followup-live" class="ai-text" aria-live="polite" hidden></div></form>`;
+  section.innerHTML=`<div class="section-title"><h2>继续追问</h2><span>围绕本次交易继续排查</span></div><p>结合本次日志、原始截图、当前已保存的业务文档和最近对话回答。追问不会重新查询日志；需要最新日志时，请点击「重新查询并分析」。${history.omitted?'较早的 '+history.omitted+' 轮对话仍保留在报告中，本次未加入模型上下文。':''}</p><div id="followup-history">${(r.followups||[]).map(t=>followupTurnHtml(t)).join('')}${pending?followupTurnHtml(pending.turn,true):''}</div><form id="followup-form"><label for="followup-question">继续问 AI</label><textarea id="followup-question" rows="3" maxlength="4000" required placeholder="例如：哪条日志能证明这个原因？接下来具体要检查什么？" ${pending?'disabled':''}></textarea><div class="model-actions"><button class="primary" id="followup-send" type="submit" ${pending?'disabled':''}>发送追问</button><button class="text-button" id="followup-stop" type="button" hidden>停止回答</button><button class="text-button" id="followup-save" type="button" ${pending?'':'hidden'}>重试保存</button></div><p id="followup-status" role="status">${pending?'回答尚未保存，请重试保存或先导出报告。':''}</p><div id="followup-live" class="ai-text" aria-live="polite" hidden></div></form>`;
   $('#result .ai-text').after(section);
   $('#followup-stop').onclick=()=>followupJob?.abort();
   $('#followup-save').onclick=async()=>{
@@ -36,7 +36,7 @@ async function runFollowup(r){
   try{
     const knowledge=await api('/knowledge','GET',undefined,scope);controller.signal.throwIfAborted();
     const history=PayTraceFollowup.context(r);
-    const report={id:r.id,kind:r.kind,workspaceId:scope,transaction:r.transaction,question:r.question,evidence:r.evidence,coverage:r.coverage,ai:r.ai,followups:history.turns};
+    const report={id:r.id,kind:r.kind,workspaceId:scope,transaction:r.transaction,question:r.question,images:r.images,evidence:r.evidence,coverage:r.coverage,ai:r.ai,followups:history.turns};
     const response=await fetch('/api/investigations/followup/stream',{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({workspace:scope,reportId:r.id,report,question,markdown:knowledge.markdown||'',expectedCount,revision})});
     if(!response.ok){const error=await response.json();throw Error(error.message||'追问请求失败');}
     let result;
