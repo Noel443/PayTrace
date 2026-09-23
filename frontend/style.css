@@ -492,6 +492,7 @@ html[data-auth-required]:not([data-authenticated]) body { visibility: hidden; }
 .config-dialog form > label { margin-top: 18px; }
 .config-dialog textarea { width: 100%; }
 .config-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; margin-top: 18px; }
+.source-endpoint-grid { grid-template-columns: minmax(0,3fr) minmax(130px,1fr); align-items: end; }
 .config-dialog .knowledge-toggle input { width: 16px; }
 .remote-source-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; margin-top: 20px; }
 .remote-source-card { border: 1px solid #dfe5ee; padding: 20px; border-radius: 7px; min-width: 0; }

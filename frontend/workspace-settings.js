@@ -1,5 +1,5 @@
 (() => {
-  let sources=[],loadedScope='',editing=null,sourceScope='',saving=false,loadVersion=0;
+  let sources=[],loadedScope='',editing=null,copying=false,sourceScope='',saving=false,loadVersion=0;
   const field=name=>document.getElementById('source-'+name);
   document.querySelectorAll('[data-close-dialog]').forEach(button=>button.addEventListener('click',()=>{if(!saving)document.getElementById(button.dataset.closeDialog).close()}));
   $('#source-dialog').addEventListener('cancel',e=>{if(saving)e.preventDefault()});
@@ -48,7 +48,7 @@
     if(!response.ok){if(data.sources&&scope===workspaceId){sources=data.sources;render()}throw Error((data.message||'数据源请求失败')+(data.saveWarning?'；'+data.saveWarning:''));}return full?data:data.sources;
   }
   function render(){
-    $('#remote-source-list').innerHTML=sources.length?sources.map(s=>`<article class="remote-source-card"><div class="provider-heading"><div><h3>${esc(s.name)}</h3><p>${s.logs?s.logs.length+' 条日志规则':esc(s.service)} · ${esc(s.environment)}</p></div><span class="tag ${s.enabled&&s.lastCheck?.ok?'':'amber'}">${s.enabled?'已启用':'已停用'} · ${esc(s.connectionStatus)}</span></div><dl><div><dt>SSH 服务器</dt><dd>${esc(s.host)}:${s.port}</dd></div><div><dt>登录账号</dt><dd>${esc(s.username)} · ${s.connectionMode==='menu'?'堡垒机密码已保存':s.hasPassword?'密码已保存':'未保存密码'}</dd></div>${s.connectionMode==='menu'?`<div><dt>连接方式</dt><dd>usmshell · ${esc(s.jumpHost)}:${s.jumpPort} · ${esc(s.jumpUsername)}</dd></div>`:''}<div><dt>日志路径</dt><dd>${(s.logs||[{logPath:s.logPath}]).map(r=>esc(r.logPath)).join('<br>')}${!s.logPath.startsWith('/')&&!s.logPath.startsWith('~/')?'<br>相对目录：'+esc(s.logDirectory||'SSH 账号主目录'):''}</dd></div></dl><p class="source-check-status">${s.lastCheck?esc(new Date(s.lastCheck.checkedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}))+' · '+esc(s.lastCheck.message):'尚未测试连接'}</p><div class="model-actions"><button type="button" class="text-button" data-source-action="test" data-id="${esc(s.id)}" ${!s.enabled?'disabled':''}>测试连接</button><button type="button" class="primary" data-source-action="search" data-id="${esc(s.id)}" ${!s.enabled?'disabled':''}>查询日志</button><button type="button" class="text-button" data-source-action="toggle" data-id="${esc(s.id)}">${s.enabled?'停用':'启用'}</button><button type="button" class="text-button" data-source-action="edit" data-id="${esc(s.id)}">编辑配置</button><button type="button" class="text-button danger-action" data-source-action="delete" data-id="${esc(s.id)}">删除</button></div></article>`).join(''):'<div class="workspace-empty"><h3>还没有服务器日志数据源</h3><p>点击“添加数据源”，填写服务器地址、SSH 账号和日志路径。</p></div>';
+    $('#remote-source-list').innerHTML=sources.length?sources.map(s=>`<article class="remote-source-card"><div class="provider-heading"><div><h3>${esc(s.name)}</h3><p>${s.logs?s.logs.length+' 条日志规则':esc(s.service)} · ${esc(s.environment)}</p></div><span class="tag ${s.enabled&&s.lastCheck?.ok?'':'amber'}">${s.enabled?'已启用':'已停用'} · ${esc(s.connectionStatus)}</span></div><dl><div><dt>SSH 服务器</dt><dd>${esc(s.host)}:${s.port}</dd></div><div><dt>登录账号</dt><dd>${esc(s.username)} · ${s.connectionMode==='menu'?'堡垒机密码已保存':s.hasPassword?'密码已保存':'未保存密码'}</dd></div>${s.connectionMode==='menu'?`<div><dt>连接方式</dt><dd>usmshell · ${esc(s.jumpHost)}:${s.jumpPort} · ${esc(s.jumpUsername)}</dd></div>`:''}<div><dt>日志路径</dt><dd>${(s.logs||[{logPath:s.logPath}]).map(r=>esc(r.logPath)).join('<br>')}${!s.logPath.startsWith('/')&&!s.logPath.startsWith('~/')?'<br>相对目录：'+esc(s.logDirectory||'SSH 账号主目录'):''}</dd></div></dl><p class="source-check-status">${s.lastCheck?esc(new Date(s.lastCheck.checkedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}))+' · '+esc(s.lastCheck.message):'尚未测试连接'}</p><div class="model-actions"><button type="button" class="text-button" data-source-action="test" data-id="${esc(s.id)}" ${!s.enabled?'disabled':''}>测试连接</button><button type="button" class="primary" data-source-action="search" data-id="${esc(s.id)}" ${!s.enabled?'disabled':''}>查询日志</button><button type="button" class="text-button" data-source-action="toggle" data-id="${esc(s.id)}">${s.enabled?'停用':'启用'}</button><button type="button" class="text-button" data-source-action="copy" data-id="${esc(s.id)}">复制配置</button><button type="button" class="text-button" data-source-action="edit" data-id="${esc(s.id)}">编辑配置</button><button type="button" class="text-button danger-action" data-source-action="delete" data-id="${esc(s.id)}">删除</button></div></article>`).join(''):'<div class="workspace-empty"><h3>还没有服务器日志数据源</h3><p>点击“添加数据源”，填写服务器地址、SSH 账号和日志路径。</p></div>';
   }
   window.loadLogSources=async()=>{
     const scope=workspaceId,version=++loadVersion;loadedScope='';sources=[];$('#add-log-source').disabled=true;$('#remote-source-list').replaceChildren();$('#source-feedback').textContent='正在读取服务器配置…';
@@ -57,6 +57,7 @@
   function passwordHint(){
     const same=editing&&(editing.connectionMode||'ssh')===field('connectionMode').value&&(editing.jumpHost||'')===field('jumpHost').value.trim()&&(editing.jumpUsername||'')===field('jumpUsername').value.trim()&&Number(editing.jumpPort||22)===Number(field('jumpPort').value)&&editing.host===field('host').value.trim()&&editing.port===Number(field('port').value)&&editing.username===field('username').value.trim();
     $('#source-password-state').textContent=same?'密码已保存，留空保留，填写新值可替换。':'请输入 SSH 密码；更换服务器、端口或账号后不会沿用旧密码。';
+    if(copying)$('#source-password-state').textContent=field('connectionMode').value==='menu'?'这是复制配置，请重新输入堡垒机密码。':'这是复制配置，请重新输入目标服务器 SSH 密码。';
     const menu=field('connectionMode').value==='menu';
     field('password').disabled=menu;field('password').required=!menu&&!same;
     field('jumpPassword').required=menu&&!same;
@@ -79,11 +80,12 @@
   }
   $('#source-add-log').onclick=()=>addLogRow();
   $('#source-qa-logs').onclick=()=>{const rows=$('#source-log-rows');if(rows.children.length===1&&!rows.querySelector('[data-log-path]').value)rows.replaceChildren();addLogRow({logPath:'*-console.log'});};
-  function open(source=null){
+  function open(source=null,copy=false){
     if(saving||window.workspaceMutation||loadedScope!==workspaceId)return;
-    editing=source;sourceScope=workspaceId;$('#source-form').reset();$('#source-dialog-title').textContent=source?'编辑日志数据源':'添加日志数据源';$('#source-workspace').textContent='所属空间：'+activeWorkspace.name;
+    editing=copy?null:source;copying=copy;sourceScope=workspaceId;$('#source-form').reset();$('#source-dialog-title').textContent=copy?'复制日志数据源':source?'编辑日志数据源':'添加日志数据源';$('#source-workspace').textContent='所属空间：'+activeWorkspace.name;
     if(!source)field('environment').value=window.paytraceRuntime?.environment==='production'?'生产环境':'测试环境';
     for(const name of ['name','service','host','port','username','environment'])if(source)field(name).value=source[name];
+    if(copy){field('name').value=(source.name+'（副本）').slice(0,60);}
     field('connectionMode').value=source?.connectionMode||'ssh';
     for(const name of ['jumpHost','jumpPort','jumpUsername'])if(document.getElementById('source-'+name))document.getElementById('source-'+name).value=source?.[name]|| (name==='jumpPort'?22:'');
     field('directory').value=source?.logDirectory||'';field('jumpPassword').value='';$('#source-log-rows').replaceChildren();for(const rule of source?.logs||[{logPath:source?.logPath||'',service:source?.service||''}])addLogRow(rule);field('enabled').checked=source?.enabled??true;field('password').value='';$('#source-form-feedback').textContent='';passwordHint();updateConnectionFields();$('#source-dialog').showModal();
@@ -104,6 +106,7 @@
     const button=e.target.closest('[data-source-action]');if(!button||saving||window.workspaceMutation||loadedScope!==workspaceId)return;
     const source=sources.find(s=>s.id===button.dataset.id);if(!source)return;
     if(button.dataset.sourceAction==='edit'){open(source);return;}
+    if(button.dataset.sourceAction==='copy'){open(source,true);return;}
     if(button.dataset.sourceAction==='search'){openLogQuery(source);return;}
     const deleting=button.dataset.sourceAction==='delete';
     if(deleting&&!confirm('删除数据源“'+source.name+'”及其本机密码？远程日志文件不会删除。'))return;
