@@ -1,0 +1,26 @@
+frontend/workspace-settings.js
+  s_ee69db33001351::t_78d71f35fbcc20 2,60,85,88
+  s_ee69db33001351::t_a142889d157f78 51,83,109
+frontend/style.css
+  s_ee69db33001351::t_7f47e8397c4252 495
+frontend/index.html
+  s_ee69db33001351::t_58585562aa5ccf 49
+README.md
+  s_ee69db33001351::t_d3b57eaafdad08 110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "227c0c843495d07a71ec3863837d6ef5e05d81cc",
+  "prompts": {},
+  "sessions": {
+    "s_ee69db33001351": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cc16-af55-75f1-aeec-79ea219e881a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
