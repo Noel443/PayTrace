@@ -4,7 +4,7 @@ import {mkdir,open} from 'node:fs/promises';
 import path from 'node:path';
 
 export function shellQuote(value){return "'"+String(value).replace(/'/g,"'\\''")+"'";}
-export function logCommand(source,action,query=''){
+export function logCommand(source,action,query='',contextLines=200){
   // 展开主目录时仅使用远端 HOME；路径其余部分始终作为字面量引用。
   const homePath=value=>value==='~'?'"$HOME"':value.startsWith('~/')?'"$HOME"/'+shellQuote(value.slice(2)):shellQuote(value);
   if(action==='discover'){
@@ -21,7 +21,8 @@ export function logCommand(source,action,query=''){
   if(action==='test')return check+`( : < ${file} ) 2>/dev/null || exit 43; printf 'PAYTRACE_READABLE\\n'`;
   if(action!=='search')throw Error('不支持的 SSH 操作');
   if(typeof query!=='string'||!query.trim()||query.length>200||/[\r\n\0]/.test(query))throw Error('请输入 1–200 个字符的流水号或关联标识，不能包含换行');
-  return check+`LC_ALL=C grep -n -F -m 20 -C 200 -- ${shellQuote(query.trim())} ${file}`;
+  if(![0,100,200,500,1000].includes(contextLines))throw Error('日志上下文范围无效');
+  return check+`LC_ALL=C grep -n -F -m 20 -C ${contextLines} -- ${shellQuote(query.trim())} ${file}`;
 }
 export function sshFailure(code,stderr=''){
   if(/REMOTE HOST IDENTIFICATION HAS CHANGED|Host key verification failed/i.test(stderr))return '服务器主机密钥校验失败；请核实服务器身份后检查本机 data/ssh/known_hosts，系统不会自动覆盖旧密钥';
@@ -35,10 +36,10 @@ export function sshFailure(code,stderr=''){
   if(code===43)return 'SSH 登录成功，但当前账号无权读取日志文件';
   return 'SSH 操作失败，请检查服务器配置、日志读取权限和远端 grep/head 命令';
 }
-export async function runSsh(source,{action='test',query='',knownHostsFile,signal,timeoutMs=30000,maxBytes=262144,spawnProcess=spawn}={}){
+export async function runSsh(source,{action='test',query='',contextLines=200,knownHostsFile,signal,timeoutMs=30000,maxBytes=262144,spawnProcess=spawn}={}){
   if(!source.enabled)throw Error('该数据源已停用，请先启用');
   if(['0.0.0.0','::','0:0:0:0:0:0:0:0'].includes(source.host))throw Error('请把监听地址 '+source.host+' 改为可访问的实际服务器 IP 或域名');
-  const command=logCommand(source,action,query);
+  const command=logCommand(source,action,query,contextLines);
   if(signal?.aborted)throw Error('SSH 操作已取消');
   await mkdir(path.dirname(knownHostsFile),{recursive:true,mode:0o700});
   const file=await open(knownHostsFile,'a',0o600);await file.close();
@@ -59,7 +60,7 @@ export async function runSsh(source,{action='test',query='',knownHostsFile,signa
     function stop(){if(child?.pid){try{process.kill(-child.pid,'SIGTERM')}catch{child.kill('SIGTERM')}}}
     function end(error,result){if(finished)return;finished=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);stop();error?reject(error):resolve(result)}
     function abort(){end(Error('SSH 操作已取消；阶段：'+stages.join(' → ')))}
-    const result=()=>({ok:true,action,output:Buffer.concat(stdout).toString('utf8'),truncated,contextLines:200,maxMatches:20,durationMs:Date.now()-started,checkedAt:new Date().toISOString(),message:action==='test'?'SSH 登录成功，日志文件可读取（本次检查完成，连接已关闭）':truncated?'日志已返回，达到 256 KB 上限，结果已截断':'日志查询完成'});
+    const result=()=>({ok:true,action,output:Buffer.concat(stdout).toString('utf8'),truncated,contextLines,maxMatches:20,durationMs:Date.now()-started,checkedAt:new Date().toISOString(),message:action==='test'?'SSH 登录成功，日志文件可读取（本次检查完成，连接已关闭）':truncated?'日志已返回，达到 256 KB 上限，结果已截断':'日志查询完成'});
     try{child=spawnProcess(passwordAuth?'sshpass':'ssh',args,{stdio:[menu?'pipe':'ignore','pipe','pipe',passwordAuth?'pipe':'ignore'],detached:true})}catch{end(Error('无法启动 SSH，请确认本机已安装 ssh'));return}
     timer=setTimeout(()=>{const tail=(stderr||menuTranscript).replace(/\x1b\[[0-?]*[ -/]*[@-~]/g,'').replace(/\s+/g,' ').slice(-300);end(Error('SSH 操作超过 '+Math.round(timeoutMs/1000)+' 秒，已停止；阶段：'+stages.join(' → ')+(tail?'；终端输出：'+tail:'')))},timeoutMs);
     signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted){abort();return;}

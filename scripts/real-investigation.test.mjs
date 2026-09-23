@@ -12,7 +12,7 @@ test('identifies a search marker from the free-form question',()=>{
 test('queries only enabled sources in workspace and sends matching evidence to AI',async()=>{
   const calls=[];let payload;
   const report=await investigate(input,sources,config,()=>{},{search:async(s,o)=>{calls.push(s.name);assert.equal(o.query,'ORDER-1');return {output:'10-before ORDER-2\n11:ORDER-1 timeout\n12-after ORDER-2\n13:unrelated'}},model:async(c,m)=>{payload=JSON.parse(m[1].content);return {status:'completed',text:'分析 [E1]'}}});
-  assert.deepEqual(calls,['trx']);assert.equal(report.kind,'real');assert.equal(report.evidence.length,1);assert.equal(report.evidence[0].line,11);assert.equal(payload.markdown,'业务文档');assert.equal(report.ai.status,'completed');
+  assert.deepEqual(calls,['trx','trx','trx','trx','trx']);assert.equal(report.kind,'real');assert.equal(report.evidence.length,1);assert.equal(report.evidence[0].line,11);assert.match(payload.evidence[0].context,/12: after ORDER-2/);assert.equal(payload.markdown,'业务文档');assert.equal(report.ai.status,'completed');
 });
 test('no evidence avoids AI call and reports server failure',async()=>{
   const report=await investigate(input,sources,config,()=>{},{search:async()=>{throw Error('连接失败')},model:async()=>assert.fail('must not call AI')});

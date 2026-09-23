@@ -112,7 +112,7 @@ const server=http.createServer(async(req,res)=>{
       if(database&&((report.followups||[]).length!==input.expectedCount||(report.revision??0)!==(input.revision??0)))throw Error('对话或证据已更新，请重新打开报告后追问');
       const markdown=database?(await persistent.handle('/api/data/knowledge','GET',null,scope)).markdown:input.markdown;
       res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'});res.flushHeaders();
-      const turn=await followup(aiConfig,report,input.question,markdown,emit,{signal:controller.signal});
+      const turn=await followup(aiConfig,report,input.question,markdown,emit,{signal:controller.signal,sources:sourceStore.sources,knownHostsFile});
       const update={turn,expectedCount:input.expectedCount,revision:input.revision};
       let saved=false,saveError='';
       if(database){try{await persistent.handle('/api/data/investigations/'+input.reportId+'/followups','POST',update,scope);saved=true}catch{saveError='回答已完成，但保存失败，请点击重试保存；若对话已更新，请先导出并重新打开报告。'}}

@@ -42,11 +42,11 @@ test('browser persistence survives reopening, isolates workspaces, exposes quota
   const c=vm.createContext({window:{workspaceCatalog:[],workspaceData:{get(){},services(){return []}}},structuredClone,localStorage:{getItem:k=>storage.get(k)||null,setItem(k,v){if(quota)throw Error('quota');storage.set(k,v)}}});
   for(const f of ['followup-data','local-api'])vm.runInContext(await readFile(new URL('../frontend/'+f+'.js',import.meta.url),'utf8'),c);
   const api=c.window.localApi;await api('/investigations','POST',report(),'card');
-  const update={turn:turn(),expectedCount:0,revision:0};await api('/investigations/report-1/followups','POST',update,'card');
-  assert.equal((await api('/investigations/report-1','GET',null,'card')).followups.length,1);
+  const update={turn:{...turn(),logQuery:{evidence:[{id:'QE1',text:'sample exception'}],coverage:[]}},expectedCount:0,revision:0};await api('/investigations/report-1/followups','POST',update,'card');
+  assert.equal((await api('/investigations/report-1','GET',null,'card')).followups.length,1);assert.equal((await api('/investigations/report-1','GET',null,'card')).followups[0].logQuery.evidence[0].text,'sample exception');
   await assert.rejects(api('/investigations/report-1/followups','POST',update,'hk-cb'),/不存在/);
   quota=true;await assert.rejects(api('/investigations/report-1/followups','POST',{...update,expectedCount:1,turn:turn('t2')},'card'),/未保存/);
-  assert.equal((await api('/investigations/report-1','GET',null,'card')).followups.length,1);
+  assert.equal((await api('/investigations/report-1','GET',null,'card')).followups.length,1);assert.equal((await api('/investigations/report-1','GET',null,'card')).followups[0].logQuery.evidence[0].text,'sample exception');
 });
 test('MySQL adapter appends to JSON without overwriting feedback or crossing workspaces',async()=>{
   let stored=report();
@@ -56,9 +56,20 @@ test('MySQL adapter appends to JSON without overwriting feedback or crossing wor
     if(sql.startsWith('UPDATE investigations')){stored=JSON.parse(args[0]);return [{affectedRows:1}]}
     assert.fail(sql);
   }})});
-  const update={turn:turn(),expectedCount:0,revision:0},path='/api/data/investigations/report-1/followups';
+  const update={turn:{...turn(),logQuery:{evidence:[{id:'QE1',text:'sample exception'}],coverage:[]}},expectedCount:0,revision:0},path='/api/data/investigations/report-1/followups';
   await api.handle(path,'POST',update,'card');await api.handle(path,'POST',update,'card');
-  assert.equal(stored.followups.length,1);assert.equal(stored.feedback.note,'保留');
+  assert.equal(stored.followups.length,1);assert.equal(stored.followups[0].logQuery.evidence[0].text,'sample exception');assert.equal(stored.feedback.note,'保留');
   await assert.rejects(api.handle(path,'POST',{...update,turn:turn('t2')},'card'),/对话已更新/);
   await assert.rejects(api.handle(path,'POST',update,'hk-cb'),/不存在/);
+});
+
+test('expand followup re-queries workspace sources and persists separately cited evidence',async()=>{
+ const r=report(),calls=[];
+ const result=await followup({enabled:true},r,'查查附近日志，扩大范围','',()=>{},{sources:[{workspace:'card',enabled:true,name:'fixture',logPath:'trx.log'},{workspace:'other',enabled:true,name:'excluded'}],search:async(s,o)=>{calls.push([s.name,o.contextLines]);return {output:'1:ORDER-1 request\n2-java.lang.RuntimeException: sample error',contextLines:o.contextLines}},model:async(c,m)=>{assert.match(m[1].content,/sample error/);assert.match(m[1].content,/latestLogQuery/);return {text:'发现候选异常'}}});
+ assert.deepEqual(calls,[['fixture',0],['fixture',100]]);
+ assert.match(result.logQuery.evidence[0].id,/^Q.*E1$/);
+ PayTraceFollowup.append(r,{turn:result,expectedCount:0,revision:0});
+ assert.equal(r.followups[0].logQuery.evidence.length,1);
+ assert.match(followupMessages(r,'解释下这个错误')[1].content,/sample error/);
+ assert.equal(r.evidence[0].text,'ORDER-1 timeout');
 });
