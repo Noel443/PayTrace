@@ -1,3 +1,4 @@
+import {menuSession} from './bastion-menu.mjs';
 import {spawn} from 'node:child_process';
 import {mkdir,open} from 'node:fs/promises';
 import path from 'node:path';
@@ -17,7 +18,7 @@ export function logCommand(source,action,query=''){
   const file='"$paytrace_log_file"';
   const setup=`paytrace_log_file=${resolved}; `;
   const check=setup+`if [ ! -e ${file} ]; then exit 41; fi; if [ ! -f ${file} ]; then exit 42; fi; if [ ! -r ${file} ]; then exit 43; fi; `;
-  if(action==='test')return check+`head -c 1 -- ${file} >/dev/null 2>&1 || exit 43; printf 'PAYTRACE_READABLE\\n'`;
+  if(action==='test')return check+`( : < ${file} ) 2>/dev/null || exit 43; printf 'PAYTRACE_READABLE\\n'`;
   if(action!=='search')throw Error('不支持的 SSH 操作');
   if(typeof query!=='string'||!query.trim()||query.length>200||/[\r\n\0]/.test(query))throw Error('请输入 1–200 个字符的流水号或关联标识，不能包含换行');
   return check+`LC_ALL=C grep -n -F -m 20 -C 200 -- ${shellQuote(query.trim())} ${file}`;
@@ -41,31 +42,57 @@ export async function runSsh(source,{action='test',query='',knownHostsFile,signa
   if(signal?.aborted)throw Error('SSH 操作已取消');
   await mkdir(path.dirname(knownHostsFile),{recursive:true,mode:0o700});
   const file=await open(knownHostsFile,'a',0o600);await file.close();
-  const args=['-d','3','ssh','-F','/dev/null','-T','-o','StrictHostKeyChecking=accept-new','-o','UserKnownHostsFile='+knownHostsFile,'-o','GlobalKnownHostsFile=/dev/null','-o','UpdateHostKeys=no','-o','ConnectTimeout=10','-o','ServerAliveInterval=5','-o','ServerAliveCountMax=2','-o','NumberOfPasswordPrompts=1','-o','PreferredAuthentications=password,keyboard-interactive','-o','PubkeyAuthentication=no','-o','LogLevel=ERROR'];
+  const menu=source.connectionMode==='menu',passwordAuth=menu?!!source.jumpPassword:true;
+  const args=passwordAuth?['-d','3','ssh']:['ssh'];
+  args.push('-F','/dev/null',menu?'-tt':'-T','-o','RequestTTY=force','-o','StrictHostKeyChecking=accept-new','-o','UserKnownHostsFile='+knownHostsFile,'-o','GlobalKnownHostsFile=/dev/null','-o','UpdateHostKeys=no','-o','ConnectTimeout=10','-o','ServerAliveInterval=5','-o','ServerAliveCountMax=2','-o','NumberOfPasswordPrompts=1','-o',passwordAuth?'PreferredAuthentications=password,keyboard-interactive':'PreferredAuthentications=publickey','-o',passwordAuth?'PubkeyAuthentication=no':'PubkeyAuthentication=yes','-o','LogLevel=ERROR');
+  if(menu)args.push('-o','HostKeyAlgorithms=+ssh-rsa','-o','PubkeyAcceptedAlgorithms=+ssh-rsa');
   // A production source may be reached through an SSH bastion. Authentication
   // to the bastion is intentionally delegated to the local SSH agent / control
   // connection; the app never stores or forwards a second password.
-  if(source.jumpHost){args.push('-J',`${source.jumpUsername}@${source.jumpHost}:${source.jumpPort}`)}
-  args.push('-p',String(source.port),'-l',source.username,'--',source.host,command);
+  if(!menu&&source.jumpHost){args.push('-J',`${source.jumpUsername}@${source.jumpHost}:${source.jumpPort}`)}
+  if(menu)args.push('-p',String(source.jumpPort),'-l',source.jumpUsername,'--',source.jumpHost);
+  else args.push('-p',String(source.port),'-l',source.username,'--',source.host,command);
   const started=Date.now();
   return new Promise((resolve,reject)=>{
-    let child,finished=false,stdout=[],size=0,stderr='',truncated=false,timer;
+    let child,finished=false,stdout=[],size=0,stderr='',menuTranscript='',truncated=false,timer;
+    const stages=['启动 SSH 客户端'];
     function stop(){if(child?.pid){try{process.kill(-child.pid,'SIGTERM')}catch{child.kill('SIGTERM')}}}
     function end(error,result){if(finished)return;finished=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);stop();error?reject(error):resolve(result)}
-    function abort(){end(Error('SSH 操作已取消'))}
+    function abort(){end(Error('SSH 操作已取消；阶段：'+stages.join(' → ')))}
     const result=()=>({ok:true,action,output:Buffer.concat(stdout).toString('utf8'),truncated,contextLines:200,maxMatches:20,durationMs:Date.now()-started,checkedAt:new Date().toISOString(),message:action==='test'?'SSH 登录成功，日志文件可读取（本次检查完成，连接已关闭）':truncated?'日志已返回，达到 256 KB 上限，结果已截断':'日志查询完成'});
-    try{child=spawnProcess('sshpass',args,{stdio:['ignore','pipe','pipe','pipe'],detached:true})}catch{end(Error('无法启动 SSH，请确认本机已安装 ssh 和 sshpass'));return}
-    timer=setTimeout(()=>end(Error('SSH 操作超过 '+Math.round(timeoutMs/1000)+' 秒，已停止；请检查网络或缩小日志文件范围')),timeoutMs);
+    try{child=spawnProcess(passwordAuth?'sshpass':'ssh',args,{stdio:[menu?'pipe':'ignore','pipe','pipe',passwordAuth?'pipe':'ignore'],detached:true})}catch{end(Error('无法启动 SSH，请确认本机已安装 ssh'));return}
+    timer=setTimeout(()=>{const tail=(stderr||menuTranscript).replace(/\x1b\[[0-?]*[ -/]*[@-~]/g,'').replace(/\s+/g,' ').slice(-300);end(Error('SSH 操作超过 '+Math.round(timeoutMs/1000)+' 秒，已停止；阶段：'+stages.join(' → ')+(tail?'；终端输出：'+tail:'')))},timeoutMs);
     signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted){abort();return;}
-    child.on('error',()=>end(Error('无法启动 sshpass；macOS 可运行 brew install sshpass，Linux 安装 sshpass 后重试')));
-    child.stdio[3].on('error',()=>{});child.stdio[3].end(source.password+'\n');
+    child.on('error',()=>end(Error('无法启动 SSH；请确认本机已安装 ssh，密码认证还需要 sshpass')));
+    if(passwordAuth){child.stdio[3].on('error',()=>{});child.stdio[3].end((menu?source.jumpPassword:source.password)+'\n');}
+    // usmshell renders its menu after the first terminal input (Termius sends
+    // an initial newline when opening an interactive host).
+    
+    const receiveMenu=menu?menuSession(source,command,{
+      maxBytes,write:value=>{child.stdin.write(value)},stage:value=>stages.push(value),fail:error=>end(error),
+      complete:(code,output,cut)=>{
+        if(code!==0&&!(action==='search'&&code===1)){end(Error(sshFailure(code)));return;}
+        if(action==='test'&&(cut||!output.toString().includes('PAYTRACE_READABLE'))){end(Error('未能确认目标资产的日志读取权限'));return;}
+        stdout=[action==='test'?Buffer.alloc(0):output];truncated=cut;
+        const data=result();if(action==='search'&&code===1)data.message='未找到匹配日志；请核对标识和日志时间范围';end(null,data);
+      }
+    }):null;
+    if(menu)child.stdin.on('error',()=>end(Error('堡垒机会话已断开')));
     child.stdout.on('data',chunk=>{
+      if(menu){menuTranscript=(menuTranscript+chunk.toString('utf8')).slice(-1200);if(!stages.includes('收到堡垒机输出'))stages.push('收到堡垒机输出');if(!finished)receiveMenu(chunk);return;}
       if(finished)return;const remaining=maxBytes-size;stdout.push(chunk.subarray(0,Math.max(0,remaining)));size+=Math.min(chunk.length,remaining);
       if(chunk.length>remaining){if(action==='test'){end(Error('SSH 返回异常，无法确认日志权限'));return;}truncated=true;end(null,result())}
     });
     child.stderr.on('data',chunk=>{if(stderr.length<16384)stderr+=chunk.toString('utf8').slice(0,16384-stderr.length)});
     child.on('close',code=>{
       if(finished)return;
+      if(menu){
+        const detail=stderr.trim().replace(/\s+/g,' ').slice(0,800);
+        const screen=menuTranscript.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g,'').replace(/\s+/g,' ').slice(-800);
+        const diagnostics=`阶段：${stages.join(' → ')}`;
+        end(Error(code===0?`堡垒机提前关闭会话，未完成目标资产日志查询；${diagnostics}`:detail?`菜单式堡垒机 SSH 失败（退出码 ${code}）；${diagnostics}；SSH 错误：${detail}`:screen?`菜单式堡垒机 SSH 失败（退出码 ${code}）；${diagnostics}；终端最后返回：${screen}`:`菜单式堡垒机 SSH 失败（退出码 ${code}）；${diagnostics}；未收到有效菜单或目标 Shell`));
+        return;
+      }
       if(code===0||(action==='search'&&code===1)){
         const data=result();if(action==='test'&&!data.output.includes('PAYTRACE_READABLE')){end(Error('SSH 返回异常，未能确认日志读取权限'));return;}
         if(action==='test')data.output='';else if(code===1)data.message='未找到匹配日志；不代表交易未发生，请核对标识和日志时间范围';

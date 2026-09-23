@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {requestEnvironment,requireWorkspaceEnvironment} from './environments.mjs';
 import {parsePublicOrigins,requestAccess} from './request-access.mjs';
 import {followup} from './followup.mjs';
 import {investigate} from './real-investigation.mjs';
@@ -18,7 +19,7 @@ import {mysqlApi,bodyJson,insertReport} from './mysql-api.mjs';
 await loadEnv();
 const publicOrigins=parsePublicOrigins(process.env.PUBLIC_ORIGINS);
 const database=await openDatabase();
-const persistent=database?mysqlApi(database):null;
+const basePersistent=database?mysqlApi(database):null;
 const saveSources=(file,value)=>database?writeMysqlStore(database,'sources',value):writeSources(file,value);
 const saveProjects=(file,value)=>database?writeMysqlStore(database,'projects',value):writeProjects(file,value);
 const saveModels=(file,value)=>database?writeMysqlStore(database,'models',value):writeStore(file,value);
@@ -46,7 +47,19 @@ const server=http.createServer(async(req,res)=>{
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Referrer-Policy','no-referrer');
   const pathname=new URL(req.url,'http://localhost').pathname;
-  if(pathname==='/api/runtime'&&req.method==='GET'){json(res,200,{environment:runtimeMode,production:productionReadOnly,counterpartUrl});return;}
+  if(pathname.startsWith('/api/')&&!access.allowed(req)){json(res,403,{message:'访问域名未获允许，请检查 PUBLIC_ORIGINS 配置'});return;}
+  const switchable=!!database?.environmentSupport&&!productionReadOnly;
+  if(pathname==='/api/runtime'&&req.method==='GET'){
+    let environment=runtimeMode;try{environment=requestEnvironment(req,{defaultEnvironment:runtimeMode,switchable})}catch{}
+    json(res,200,{environment,production:environment==='production',readOnly:productionReadOnly,switchable,counterpartUrl,
+      switchHint:!database?'连接 MySQL 后可在此切换环境':!database.environmentSupport?'执行 sql/20260922000100_workspace_environments.sql 并重启一次后可切换环境':''});return;
+  }
+  let environment=runtimeMode;
+  if(pathname.startsWith('/api/')&&pathname!=='/api/storage'&&!pathname.startsWith('/api/auth/')){
+    try{environment=requestEnvironment(req,{defaultEnvironment:runtimeMode,switchable})}catch(e){json(res,e.status,{message:e.message});return;}
+  }
+  const persistent=basePersistent?{...basePersistent,handle:(route,method,input,scope,actor)=>basePersistent.handle(route,method,input,scope,actor,environment)}:null;
+  const checkWorkspace=scope=>requireWorkspaceEnvironment(database,workspaceKey(scope),environment);
   // Production is a deliberately read-only surface. The only writes allowed are
   // the server-side persistence performed by log investigation/AI analysis.
   if(productionReadOnly&&pathname.startsWith('/api/')&&!['GET','HEAD'].includes(req.method)&&pathname!=='/api/auth/login'&&pathname!=='/api/auth/logout'&&pathname!=='/api/investigations/stream'&&pathname!=='/api/investigations/followup/stream'){
@@ -92,6 +105,7 @@ const server=http.createServer(async(req,res)=>{
     const emit=(event,data)=>{if(!res.destroyed&&!res.writableEnded)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
     try{
       const input=await bodyJson(req,1500000),scope=workspaceKey(input.workspace);
+      await checkWorkspace(scope);
       if(typeof input.reportId!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(input.reportId))throw Error('排查记录标识无效');
       const report=database?await persistent.handle('/api/data/investigations/'+input.reportId,'GET',null,scope):input.report;
       if(report?.id!==input.reportId||report.workspaceId!==scope)throw Error('排查报告不属于当前空间');
@@ -116,9 +130,10 @@ const server=http.createServer(async(req,res)=>{
     const emit=(event,data)=>{if(!res.destroyed&&!res.writableEnded)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
     try{
       const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>450000){json(res,413,{message:'排查请求过大'});return;}chunks.push(chunk)}
-      let input;try{input=JSON.parse(Buffer.concat(chunks).toString());workspaceKey(input?.workspace)}catch{json(res,400,{message:'排查请求格式无效'});return;}
+      let input;try{input=JSON.parse(Buffer.concat(chunks).toString());workspaceKey(input?.workspace);await checkWorkspace(input.workspace)}catch{json(res,400,{message:'排查请求格式无效'});return;}
       res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'});res.flushHeaders();
       const report=await investigate(input,sourceStore.sources,aiConfig,emit,{signal:controller.signal,knownHostsFile});
+      report.environment=environment;
       controller.signal.throwIfAborted();
       if(database)try{await database.transaction(async conn=>{const [[w]]=await conn.execute('SELECT id FROM workspaces WHERE id=? AND deleted_at IS NULL FOR UPDATE',[input.workspace]);if(!w)throw Error();await insertReport(conn,report,input.workspace)})}catch{throw Error('排查完成但数据库保存失败，请检查连接后重试')}
       emit('done',{report});res.end();
@@ -145,7 +160,7 @@ const server=http.createServer(async(req,res)=>{
   if(req.url?.split('?')[0]==='/api/projects'){
     if(!access.allowed(req)){json(res,403,{message:'项目配置与分析仅限允许的页面访问'});return;}
     if(req.method==='GET'){
-      try{const workspace=workspaceKey(new URL(req.url,'http://localhost').searchParams.get('workspace'));json(res,200,{projects:publicProjects(projectStore,workspace)})}catch(e){json(res,400,{message:e.message})}return;
+      try{const workspace=workspaceKey(new URL(req.url,'http://localhost').searchParams.get('workspace'));await checkWorkspace(workspace);json(res,200,{projects:publicProjects(projectStore,workspace)})}catch(e){json(res,400,{message:e.message})}return;
     }
     if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
     if(!access.sameOrigin(req)||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请从同源页面操作项目'});return;}
@@ -155,7 +170,7 @@ const server=http.createServer(async(req,res)=>{
     let counted=false;
     try{
       const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>450000){json(res,413,{message:'项目请求过大，请缩短业务文档'});return;}chunks.push(chunk)}
-      let input;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'));workspaceKey(input?.workspace)}catch{json(res,400,{message:'项目请求格式无效'});return;}
+      let input;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'));workspaceKey(input?.workspace);await checkWorkspace(input.workspace)}catch{json(res,400,{message:'项目请求格式无效'});return;}
       if(['save','delete'].includes(input.action)){
         let next;try{next=changeProjects(projectStore,input)}catch(e){json(res,400,{message:e.message});return;}
         await saveProjects(projectsFile,next);projectStore=next;json(res,200,{projects:publicProjects(projectStore,input.workspace)});return;
@@ -181,7 +196,7 @@ const server=http.createServer(async(req,res)=>{
   if(req.url?.split('?')[0]==='/api/log-sources'){
     if(!access.allowed(req)){json(res,403,{message:'服务器配置仅限允许的页面访问'});return;}
     if(req.method==='GET'){
-      try{const scope=workspaceKey(new URL(req.url,'http://localhost').searchParams.get('workspace'));json(res,200,{sources:publicSources(sourceStore,scope)});}catch(e){json(res,400,{message:e.message})}return;
+      try{const scope=workspaceKey(new URL(req.url,'http://localhost').searchParams.get('workspace'));await checkWorkspace(scope);json(res,200,{sources:publicSources(sourceStore,scope)});}catch(e){json(res,400,{message:e.message})}return;
     }
     if(req.method!=='POST'){json(res,405,{message:'请求方式不支持'});return;}
     if(!access.sameOrigin(req)||!req.headers['content-type']?.startsWith('application/json')){json(res,403,{message:'请通过同源页面保存服务器配置'});return;}
@@ -189,7 +204,7 @@ const server=http.createServer(async(req,res)=>{
     sourcesBusy=true;
     try{
       const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>65536){json(res,413,{message:'配置过大'});return;}chunks.push(chunk)}
-      let input,next;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'));workspaceKey(input?.workspace)}catch(e){json(res,400,{message:e instanceof SyntaxError?'配置 JSON 无效':e.message});return;}
+      let input,next;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'));workspaceKey(input?.workspace);await checkWorkspace(input.workspace)}catch(e){json(res,400,{message:e instanceof SyntaxError?'配置 JSON 无效':e.message});return;}
       if(['test','search'].includes(input.action)){
         const source=sourceStore.sources.find(s=>s.id===input.id&&s.workspace===input.workspace);
         if(!source){json(res,404,{message:'当前工作空间未找到该数据源'});return;}

@@ -4,3 +4,7 @@ data/
 node_modules/
 config/database.json
 sql/*_private*.sql
+
+.env.prod
+config/database.*.json
+!config/database.example.json

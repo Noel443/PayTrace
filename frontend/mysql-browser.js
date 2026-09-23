@@ -11,6 +11,7 @@ window.initializeMysqlBrowser=async()=>{
   window.workspaceData.update=async(id,input)=>{const {workspace}=await request('/api/workspaces','POST',{...input,id});Object.assign(window.workspaceData.get(id),workspace);return workspace};
   // The server has already archived the workspace and its children in one transaction.
   window.workspaceData.remove=id=>{window.workspaceCatalog=window.workspaceCatalog.filter(w=>w.id!==id)};
+  if(window.paytraceRuntime?.environment==='production')return;
   const button=document.createElement('button');button.type='button';button.className='text-button';button.textContent='导入此浏览器旧数据';
   const notice=document.createElement('p');notice.textContent='当前使用 MySQL。可将此浏览器此前保存的空间、文档和真实排查记录导入；已有数据库内容不会被覆盖。';notice.append(button);document.querySelector('#settings').prepend(notice);
   button.onclick=async()=>{button.disabled=true;try{const result=await request('/api/import/browser','POST',{workspaces:legacy});alert('导入完成：'+result.message+'。原浏览器数据保留。');location.reload()}catch(e){alert(e.message)}finally{button.disabled=false}};

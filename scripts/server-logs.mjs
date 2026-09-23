@@ -28,5 +28,5 @@ export async function runServerLogs(source,options={},execute=runSsh){
     }catch(e){signal.throwIfAborted();files.push({logPath:rule.logPath,service:rule.service||'auto',error:e.message,output:''});}
   }
   const failed=files.filter(f=>f.error).length;
-  return {ok:failed===0,files,output:files.map(f=>`=== ${f.service} / ${f.logPath} ===\n${f.error?'查询失败：'+f.error:f.output}`).join('\n'),truncated:files.some(f=>f.truncated),durationMs:Date.now()-started,checkedAt:new Date().toISOString(),message:`检查 ${files.length} 个日志文件，${failed} 个失败`};
+  return {ok:failed===0,files,output:files.map(f=>`=== ${f.service} / ${f.logPath} ===\n${f.error?'查询失败：'+f.error:f.output}`).join('\n'),truncated:files.some(f=>f.truncated),durationMs:Date.now()-started,checkedAt:new Date().toISOString(),message:`检查 ${files.length} 个日志文件，${failed} 个失败${files.find(f=>f.error)?.error?'：'+files.find(f=>f.error).error:''}`};
 }

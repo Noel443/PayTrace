@@ -68,3 +68,24 @@ test('relative paths resolve against configured directory or remote home, never 
     }
   }finally{await rm(dir,{recursive:true,force:true})}
 });
+
+test('menu transport uses bastion password and PTY, then reads only framed target output',async()=>{
+  const dir=await mkdtemp(path.join(os.tmpdir(),'paytrace-menu-'));
+  try{
+    const result=await runSsh({...source,connectionMode:'menu',jumpPassword:'bastion-password',jumpHost:'bastion.test',jumpPort:60022,jumpUsername:'operator'}, {
+      knownHostsFile:dir+'/known_hosts',
+      spawnProcess:(command,args,options)=>{
+        assert(args.includes('-tt'));assert(!args.includes('-J'));assert.equal(args.at(-1),'bastion.test');assert(args.includes('60022'));assert.equal(options.stdio[0],'pipe');
+        const child=new EventEmitter();child.stdin=new PassThrough();child.stdout=new PassThrough();child.stderr=new PassThrough();child.stdio=[child.stdin,child.stdout,child.stderr,new PassThrough()];
+        let writes=0;
+        child.stdin.on('data',chunk=>{
+          if(writes++===0){assert.equal(chunk.toString(),':');setImmediate(()=>child.stdout.write(':'));}
+          else if(writes===2){assert.equal(chunk.toString(),'ssh operator@127.0.0.1:22\r');setImmediate(()=>child.stdout.write('-bash-4.2$ '));}
+          else {const token=chunk.toString().match(/PT_BEGIN_' '([a-f0-9]+)'/)[1];setImmediate(()=>child.stdout.write(`\nPT_BEGIN_${token}\nPAYTRACE_READABLE\n\nPT_END_${token}:0\n`));}
+        });
+        child.stdio[3].on('data',chunk=>assert.equal(chunk.toString(),'bastion-password\n'));
+        setImmediate(()=>child.stdout.write('[usmshell]\n001: menu 127.0.0.1:22 ssh operator\n'));return child;
+      }
+    });assert.equal(result.ok,true);assert.equal(result.output,'');
+  }finally{await rm(dir,{recursive:true,force:true})}
+});

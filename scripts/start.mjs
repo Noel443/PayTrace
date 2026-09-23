@@ -16,4 +16,11 @@ try{await access(envFile)}catch{
 }
 process.env.PAYTRACE_ENV=production?'production':'test';
 process.env.PAYTRACE_ENV_FILE=envFile;
-await import('./serve.mjs');
+try{
+  await import('./serve.mjs');
+}catch(error){
+  console.error('\n启动失败：'+(error?.message||error));
+  if(error?.code==='PAYTRACE_ALREADY_RUNNING')console.error('提示：已有 PayTrace 服务正在运行，请直接打开 http://127.0.0.1:19527，或先停止旧进程再重试。');
+  else if(error?.code==='PAYTRACE_SCHEMA_MISSING')console.error('提示：请先按提示执行 sql 初始化脚本。');
+  process.exitCode=1;
+}

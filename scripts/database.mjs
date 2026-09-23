@@ -1,6 +1,7 @@
 import {readFile} from 'node:fs/promises';
 import {createCipheriv,createDecipheriv,randomBytes} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
+import {environmentVersion} from './environments.mjs';
 
 export async function readDatabaseConfig(file){
   const explicit=!!file||!!process.env.DATABASE_CONFIG_FILE;
@@ -25,13 +26,33 @@ export async function openDatabase(c){
   const pool=createPool({host:c.host,port:c.port,user:c.user,password:c.password,database:c.database,connectionLimit:c.connectionLimit,charset:'utf8mb4_0900_ai_ci',timezone:'+08:00',connectTimeout:10000,waitForConnections:true,queueLimit:30});
   pool.on('connection',conn=>conn.query("SET time_zone = '+08:00'"));
   let lease;
+  let lockAcquired=false;
   try{
     lease=await pool.getConnection();
     const [[lock]]=await lease.execute("SELECT GET_LOCK(CONCAT('paytrace:', LEFT(SHA2(DATABASE(),256),48)),0) AS acquired");
-    if(Number(lock.acquired)!==1)throw Error();
+    if(Number(lock.acquired)!==1){
+      const error=new Error('同一数据库已有 PayTrace 进程运行，请直接使用现有服务或先停止旧进程');
+      error.code='PAYTRACE_ALREADY_RUNNING';
+      throw error;
+    }
+    lockAcquired=true;
     const [[row]]=await lease.execute("SELECT version FROM schema_migrations WHERE version = '20260921000100'");
-    if(!row)throw Error();
-  }catch{lease?.release();await pool.end();throw Error('MySQL 连接或结构检查失败：请检查配置、先执行 sql 初始化脚本，并确保同一数据库只运行一个 PayTrace 进程')}
+    if(!row){
+      const error=new Error('MySQL 数据库尚未初始化，请先执行 sql/20260921000100_initial_schema.sql 和 sql/20260921000200_initial_data.sql');
+      error.code='PAYTRACE_SCHEMA_MISSING';
+      throw error;
+    }
+  }catch(error){
+    if(lockAcquired)await lease?.execute("SELECT RELEASE_LOCK(CONCAT('paytrace:', LEFT(SHA2(DATABASE(),256),48)))").catch(()=>{});
+    lease?.release();await pool.end();
+    if(error?.code==='PAYTRACE_ALREADY_RUNNING'||error?.code==='PAYTRACE_SCHEMA_MISSING')throw error;
+    const wrapped=new Error('MySQL 连接失败：请检查 config/database.json 中的主机、端口、账号和密码');
+    wrapped.code='PAYTRACE_CONNECTION_FAILED';
+    wrapped.cause=error;
+    throw wrapped;
+  }
+  const [[environmentMigration]]=await pool.execute('SELECT version FROM schema_migrations WHERE version=?',[environmentVersion]);
+  const environmentSupport=!!environmentMigration;
   const codec=secretCodec(c.encryptionKey);
-  return {pool,codec,async close(){await lease.execute("SELECT RELEASE_LOCK(CONCAT('paytrace:', LEFT(SHA2(DATABASE(),256),48)))");lease.release();await pool.end()},async transaction(fn){const conn=await pool.getConnection();try{await conn.beginTransaction();const result=await fn(conn);await conn.commit();return result}catch(e){await conn.rollback();throw e}finally{conn.release()}}};
+  return {pool,codec,environmentSupport,async close(){await lease.execute("SELECT RELEASE_LOCK(CONCAT('paytrace:', LEFT(SHA2(DATABASE(),256),48)))");lease.release();await pool.end()},async transaction(fn){const conn=await pool.getConnection();try{await conn.beginTransaction();const result=await fn(conn);await conn.commit();return result}catch(e){await conn.rollback();throw e}finally{conn.release()}}};
 }

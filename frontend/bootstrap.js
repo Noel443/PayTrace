@@ -3,10 +3,22 @@
     try{window.paytraceRuntime=await fetch('./api/runtime',{credentials:'same-origin'}).then(r=>r.ok?r.json():({environment:'test'}))}catch{window.paytraceRuntime={environment:'test'}}
     const runtime=window.paytraceRuntime;
     const label=document.querySelector('#environment-label'),switcher=document.querySelector('#switch-environment');
-    if(runtime.production){label.textContent='生产环境 · 只读';document.title='PayTrace · 生产日志分析';}
+    if(runtime.production){label.textContent=runtime.readOnly?'生产环境 · 只读':'生产环境';document.title='PayTrace · 生产日志分析';}
     else label.textContent='测试环境';
-    if(runtime.counterpartUrl){switcher.hidden=false;switcher.textContent=runtime.production?'切换测试环境':'切换生产环境';switcher.onclick=()=>{window.location.href=runtime.counterpartUrl}};
-    if(runtime.production){
+    if(runtime.switchable){
+      switcher.hidden=false;switcher.textContent=runtime.production?'切换测试环境':'切换生产环境';
+      switcher.onclick=()=>{
+        if(typeof busy!=='undefined'&&busy||window.workspaceMutation){alert('请等待当前排查或保存完成后切换环境');return}
+        if(!confirm('切换环境会重新加载页面，未保存的编辑不会保留。是否继续？'))return;
+        window.dispatchEvent(new Event('paytrace:logout'));
+        window.paytraceEnvironment.switchTo(runtime.production?'test':'production');
+      };
+    }else{
+      window.paytraceEnvironment.reset();
+      if(runtime.counterpartUrl){switcher.hidden=false;switcher.textContent=runtime.production?'切换测试环境':'切换生产环境';switcher.onclick=()=>{window.location.href=runtime.counterpartUrl}}
+      else if(runtime.switchHint){switcher.hidden=false;switcher.textContent='环境切换待配置';switcher.onclick=()=>alert(runtime.switchHint)}
+    }
+    if(runtime.readOnly){
       document.querySelectorAll('[data-view="settings"],[data-view="history"]').forEach(el=>{el.hidden=true;el.disabled=true});
       document.querySelectorAll('#add-workspace,#edit-workspace,#delete-workspace').forEach(el=>{el.hidden=true;el.disabled=true});
       const settings=document.querySelector('#settings');if(settings)settings.hidden=true;

@@ -12,7 +12,7 @@
 
 简单说：先建数据库，依次执行 SQL，再填写连接信息并把 `driver` 改成 `mysql`，重启服务即可。没有启动 MySQL 时保持 `local`，演示可以照常运行；两种模式的数据彼此独立，切换不会自动搬数据。
 
-配置文件是项目根目录的 **`config/database.json`**，模板为 [`config/database.example.json`](config/database.example.json)。本机已准备的配置使用 `local` 并生成了加密密钥；全新检出时从模板复制，随后生成自己的密钥。真实配置被 Git 忽略，不会提交。
+配置文件是项目根目录的 **`config/database.json`**，模板为 [`config/database.example.json`](config/database.example.json)。实际配置不存在时使用本地存储；接入数据库时从模板复制，填写连接信息并生成自己的加密密钥。真实配置被 Git 忽略，不会提交。
 
 ```json
 {
@@ -43,12 +43,13 @@ CREATE DATABASE paytrace CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE paytrace;
 SOURCE sql/20260921000100_initial_schema.sql;
 SOURCE sql/20260921000200_initial_data.sql;
+SOURCE sql/20260922000100_workspace_environments.sql;
 -- 然后执行本机生成的 YYYYMMDDHHmmss_private_local_seed.sql（若有）
 ```
 
 命令行可在项目根目录运行 `mysql -h 127.0.0.1 -u <有建库权限的账号> -p` 后输入以上语句，也可用数据库客户端打开脚本并选择目标库执行。运行应用的账号需具有目标库 SELECT / INSERT / UPDATE 权限；不需要 DROP / DELETE 或建库权限。脚本没有建数据库账号，请使用你本机已有账号或自行创建专用账号。
 
-新库只依次执行 initial_schema、initial_data，再按需执行 private_local_seed；不要执行仅供旧 UTC 库使用的 legacy_utc_to_beijing，也不要直接批量执行整个 sql 目录。基础数据包含 `admin / admin` 登录用户与外卡支付、跨境支付、MSO 三个空间，不带伪造交易和日志。重复执行只补缺失数据，不重置密码、覆盖空间或恢复已归档记录。表结构通过 `schema_migrations` 记录，后续结构调整应新增时间戳 SQL，不修改已部署版本。
+新库依次执行 initial_schema、initial_data、workspace_environments，再按需执行 private_local_seed；不要执行仅供旧 UTC 库使用的 legacy_utc_to_beijing，也不要直接批量执行整个 sql 目录。基础数据包含 `admin / admin` 登录用户与外卡支付、跨境支付、MSO 三个空间，不带伪造交易和日志。重复执行只补缺失数据，不重置密码、覆盖空间或恢复已归档记录。表结构通过 `schema_migrations` 记录，后续结构调整应新增时间戳 SQL，不修改已部署版本。
 
 旧数据分两部分迁移：
 
@@ -71,7 +72,7 @@ unset paytrace_password
 | --- | --- | --- |
 | `users` | 全局登录用户 | 唯一账号、显示名、scrypt 哈希、启用状态 |
 | `sessions` | 用户会话 | 令牌 SHA256、用户外键、到期和撤销时间 |
-| `workspaces` | 共享业务空间 | 名称、说明、业务线、创建人、软删除时间 |
+| `workspaces` | 按环境隔离的业务空间 | environment（test / production）、名称、说明、业务线、创建人、软删除时间 |
 | `workspace_knowledge` | 每空间一份知识配置 | Markdown、旧项目路径、扫描开关的 JSON |
 | `investigations` | 空间排查报告 | 搜索标识、证据版本、反馈状态和完整报告 JSON |
 | `projects` | 空间项目及分析 | 仓库与分支配置、最后成功链路、文件引用 JSON |
@@ -107,7 +108,7 @@ MySQL 模式新增：`GET /api/workspaces`、`POST /api/workspaces`（新建/编
 - MySQL 模式中空间、文档与排查记录由数据库保存，同一服务下换浏览器登录可看到相同数据；本地模式仍按浏览器分别保存。
 - 保存后点击“测试连接”，真实验证 SSH 账号密码及日志文件读取权限。状态保留最近检查时间，修改配置后需重新测试。检查结束即断开，不是常驻连接。
 - 点击“查询日志”，输入交易流水号或消息 ID，通过 `grep -n -F -m 20 -C 200` 读取单个配置文件。最多 20 处匹配、前后各 200 行、256 KB 输出、30 秒超时；截断会明确提示。上下文可能包含其他交易，结果不自动合入沙箱报告或发送给 AI。
-- IP 应填写实际可达地址，不能用 `0.0.0.0` 或 `::`。内网服务器需要本机网络 / VPN 可达；仅支持 SSH 密码认证及 Linux / Unix 日志文件，暂不支持私钥、跳板机与多因素登录。
+- IP 应填写实际可达地址，不能用 `0.0.0.0` 或 `::`。内网服务器需要本机网络 / VPN 可达；支持 SSH 密码认证、ProxyJump 及 usmshell 菜单式堡垒机；日志须为 Linux / Unix 文件。菜单模式暂不支持多因素认证或目标资产二次密码提示。
 - 本地需安装 OpenSSH 客户端与 `sshpass`。本次开发机器已具备；其他 macOS 可用 `brew install sshpass`，Linux 安装发行版的 sshpass 软件包。密码通过进程私有管道传入，不进入命令行参数或环境变量。
 - 首次连接采用 SSH accept-new 策略，将主机公钥记入 `data/ssh/known_hosts`；后续密钥变化会拒绝连接。需先核实服务器身份，再人工处理对应记录，不自动绕过校验。
 - 新工作空间仍未接入真实交易查询及自动跨服务排障；可以先使用服务配置里的远程日志查询。
@@ -146,21 +147,32 @@ MySQL 模式将项目配置及最后一次成功分析保存在 `projects` 表�
 
 接口：本机 `GET /api/projects?workspace=<id>`、`POST /api/projects`（`save` / `analyze`）。代码扫描最多 30 秒，模型阶段默认最多 300 秒，可在服务商编辑窗口调整为 30–3600 秒。测试使用临时仓库和模型桩响应，不会发送用户项目代码。
 
-## 接入真实 AI
+## 页面切换测试与生产
 
-## 启动测试与生产
+本地使用同一 MySQL 应用库时，运行一次 `npm start`，登录后点击右上角“切换生产环境 / 切换测试环境”即可。切换会重新加载当前页面，不需要重启 Node 服务或切换端口；当前排查完成后再切换，未保存的编辑需先保存。选择只保存在当前标签页，其他标签页仍使用各自的环境。
 
-启动命令已经区分环境：
+首次准备：填写 `config/database.json`，对目标应用库执行 `sql/20260922000100_workspace_environments.sql`，然后重启服务一次。新库先执行前文的建表及基础数据 SQL。未接入 MySQL 或未执行迁移时，页面显示“环境切换待配置”并说明原因，原有本地模式和旧库功能仍可使用。本机现有 `127.0.0.1:3306/paytrace` 已接入并完成此迁移，旧凭据沿用原加密密钥；迁移前私有备份保存在被 Git 忽略的 `data/backups/`。这份本机配置不随仓库分发，其他机器仍需自行准备。
 
-```bash
-npm start                 # 测试环境，默认
-npm run start:test        # 测试环境
-npm run start:prod        # 生产环境，只读日志查询与分析
+迁移只增加 `workspaces.environment` 字段（默认 `test`）及环境索引，不新增业务表。原空间及其日志源、项目、文档和排查报告保留为测试数据；初始化三个独立的生产空间，名称带“（生产）”，需在生产页面自行配置日志源。各环境通过不同的 `workspace_id` 隔离已有业务表，新建空间归属当前环境。空间名称仍在整个库内唯一。账号、会话和模型服务商全局共用，因此修改模型也影响另一环境；环境切换不表示用户权限隔离。
+
+本地管理入口在两个环境均可配置数据源、查看历史、保存文档与反馈；“生产环境”表示该空间的数据归属，不表示已连接真实生产服务器。只有配置并主动查询相应 SSH 数据源后才会读取服务器日志。旧浏览器数据仅允许从测试页面导入，避免误入生产空间。
+
+技术实现：`frontend/environment.js` 在页面加载时固定 `X-PayTrace-Environment` 请求头，切换后重新加载，不改变在途请求的目标。`scripts/environments.mjs` 校验环境值，`scripts/serve.mjs` 校验日志源、项目、排查与追问的空间归属；`scripts/mysql-api.mjs` 按环境查询空间，并在读写文档、报告和空间时拒绝跨环境 ID。报告额外记录环境快照，持久化仍通过空间外键归属。服务启动时读取迁移版本，未迁移的旧库不开放切换。
+
+单独部署只读生产服务时，仍支持以下命令：
+
+```sh
+npm start                 # 本地管理入口，接入 MySQL 后可切换两种环境
+npm run start:test        # 同上
+npm run start:prod        # 独立生产只读入口，必须提供 .env.prod
 ```
 
-首次配置时复制 `.env.test.example` 为 `.env.test`，复制 `.env.prod.example` 为 `.env.prod`。测试和生产必须使用不同的数据库配置、`encryptionKey`、数据目录和登录域名。生产启动前必须存在 `.env.prod`，否则程序会拒绝启动；测试环境没有 `.env.test` 时会回退读取 `.env`。
+独立部署应准备 `.env.prod`（参考 `.env.prod.example`）及独立数据库配置；同一应用库仍只允许一个 Node 进程。生产实例通过 `PAYTRACE_ENV=production` 固定只读模式，不能通过请求头切到测试环境绕过限制。若独立库已经执行环境迁移，只读取其中 production 空间；迁移前既有空间默认划为 test，请先明确数据归属再迁移。`PAYTRACE_COUNTERPART_URL` 仅供不同部署之间跳转，本地数据库切换无需填写它。生产日志源支持堡垒机 ProxyJump，认证使用本机 VPN / SSH Agent。
 
-生产实例通过 `PAYTRACE_ENV=production` 强制进入只读模式。生产页面不提供配置和删除入口，服务端也会拦截配置修改、删除等写请求。生产日志源中填写堡垒机地址、端口和账号后，SSH 查询通过 `ProxyJump` 到目标服务器；堡垒机认证使用本机 VPN / SSH Agent，不在应用中保存堡垒机密码。
+验证：`npm test` 包含环境值校验、跨环境 ID 拒绝、浏览器请求目标固定及外部请求不携带环境头；`MYSQL_TEST_CONFIG=... npm run test:mysql` 在新建隔离库重复执行迁移，验证默认测试归属、生产空空间、并发环境查询、配置/文档/报告隔离和登录会话。测试库保留供检查。
+
+
+## 接入真实 AI
 
 Node 本地服务调用真实模型，支持 SSH 日志排查及项目业务链路分析。无需 Java；真实 AI、SSH 和 MySQL 均需通过 `npm start` 访问。
 
@@ -223,12 +235,14 @@ npm install
 npm start
 ```
 
-访问 http://127.0.0.1:19527 。`scripts/serve.mjs` 默认监听本机端口 19527，直接运行 `npm start` 即可；设置环境变量或 `.env` 中的 `PORT` 可覆盖默认值。使用 SSH 时还需 ssh 与 sshpass。端口冲突可用 `PORT=19528 npm start`。
+访问 http://127.0.0.1:19527 。`npm start` 启动测试环境，配置优先读取 `.env.test`，不存在时读取 `.env`，两者都不存在时读取 `.env.test.example`；这些文件不会叠加加载，Shell 环境变量优先于文件。`scripts/serve.mjs` 默认监听本机端口 19527。使用 SSH 时还需 ssh 与 sshpass。端口冲突可用 `PORT=19528 npm start`。
+
+本机测试可从 `.env.test.example` 复制生成 `.env.test`，保持 `PUBLIC_ORIGINS=` 为空。若启动报“PUBLIC_ORIGINS 需要 MySQL 模式的服务端登录验证”，说明当前使用本地存储却配置了公网来源；本机使用应在当前环境配置中留空该项，公网访问则需先配置 MySQL。测试环境默认仍读取 `config/database.json`；需要独立测试库时设置 `DATABASE_CONFIG_FILE`。生产环境使用 `npm run start:prod`，必须准备 `.env.prod`。
 
 
 ## NATAPP 内网穿透访问
 
-在项目根目录 `.env` 添加公网来源地址，然后重启 `npm start`：
+在当前启动使用的环境文件中（测试环境优先 `.env.test`，生产环境 `.env.prod`）添加公网来源地址，然后重启对应服务：
 
 ```dotenv
 PUBLIC_ORIGINS=http://your-domain.natappfree.cc
@@ -242,7 +256,7 @@ PUBLIC_ORIGINS=http://your-domain.natappfree.cc
 
 ## 工作空间与业务链路
 
-左侧保留外卡支付、跨境支付、MSO 三个工作空间，支持新建、编辑与删除。各空间文档与数据源独立管理，模型配置共用。
+测试环境保留外卡支付、跨境支付、MSO 三个工作空间；完成环境迁移后，生产环境拥有对应的三个独立空空间。支持新建、编辑与删除，各空间文档、项目、日志源和排查记录独立，模型配置共用。
 
 ## 可以体验
 
@@ -296,7 +310,7 @@ MYSQL_TEST_CONFIG=config/database.json npm run test:mysql
 
 测试账号须有创建测试数据库和表的权限；建议使用专门的本机 MySQL 测试实例。测试每次新建随机命名的 `paytrace_test_*` 库，只修改该隔离库，重复执行基础 SQL，验证外键、初始化幂等、重启持久化、工作空间隔离、批量删除失败回滚、密文存储、同源校验、登录与退出。时间验证覆盖北京时间存储、Date 读写往返、连接字符集和排序规则、8 小时登录有效期、退出时间，以及旧 UTC 转换脚本重复执行不重复加 8 小时；保留测试库供检查，不自动清理。未传 MYSQL_TEST_CONFIG 时明确跳过，不算数据库验证成功。
 
-追问回归通过 `node --test scripts/followup.test.mjs` 验证上下文、失败与取消、存储隔离、并发冲突和幂等追加；全量检查使用 `npm test`。已有 MySQL 8.4.11 隔离库集成验证记录，测试 Node 进程使用 TZ=UTC，确认数据库日期转换不依赖服务器本地时区。追问追加的真实数据库集成用例已加入上述脚本；当前配置账号无创建测试库权限，该部分尚未通过真实 MySQL 验证。实际业务库迁移未自动执行，接入自己的 MySQL 后应先完成备份及上述验证。
+追问回归通过 `node --test scripts/followup.test.mjs` 验证上下文、失败与取消、存储隔离、并发冲突和幂等追加；全量检查使用 `npm test`。已有 MySQL 8.4.11 隔离库集成验证记录，测试 Node 进程使用 TZ=UTC，确认数据库日期转换不依赖服务器本地时区。追问追加的真实数据库集成用例已加入上述脚本；需使用有创建隔离测试库权限的本机测试账号运行。实际业务库迁移未自动执行，接入自己的 MySQL 后应先完成备份及上述验证。
 
 ## 日志目录与相对路径
 
@@ -309,3 +323,12 @@ MYSQL_TEST_CONFIG=config/database.json npm run test:mysql
 
 
 一台服务器可配置多条日志规则，共用地址、SSH 账号和密码。日志目录填写实际路径（登录后执行 `pwd` 获取）；规则支持具体文件和当前目录中的 `*` / `?` 文件名通配符。例如 `*-console.log` 匹配 `trx-console.log`、`daemon-console.log`、`merchant-console.log` 和 `boss-console.log`，不匹配 `trx-console.2026-09-20.log`。可逐行指定服务，留空则从文件名识别。每台服务器最多查询 20 个文件，重复文件去重，查询保留每个文件的失败情况和服务来源。相同搜索标识的跨服务日志一起交给 AI；暂不自动扩展订单号、渠道流水号等不同标识之间的映射。旧单文件配置兼容。
+
+
+### usmshell 菜单式堡垒机
+
+在运行 PayTrace 的电脑上先连接 VPN。添加日志数据源时选择“菜单式堡垒机（usmshell）”：目标服务器地址、端口和账号填写资产列表中的机器；堡垒机地址、端口和账号填写最初登录菜单的连接信息。“登录密码”填写堡垒机密码，沿用现有密码字段的加密存储，不需要新增数据库表或迁移。
+
+程序申请 SSH 终端，识别 `[usmshell]` 菜单，发送按目标地址生成的 `:ssh 用户@主机:端口` 指令，等待目标 shell，再执行固定日志检查或查询。无需填写资产编号，不支持任意自定义登录脚本。目标资产必须由堡垒机托管并自动登录；额外密码或验证码不自动提交。菜单差异、网络不可达或无法识别 shell 会失败或超时，不能把保存成功当作连接成功。
+
+日志目录填写进入目标机器后 `pwd` 的绝对路径，日志规则填写实际文件名或文件名通配符，不填写 `cd` / `tail`。菜单模式已用模拟交互测试，实际堡垒机需连接 VPN 并填写密码后在页面测试连接。
