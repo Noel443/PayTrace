@@ -1,0 +1,30 @@
+scripts/real-investigation.test.mjs
+  s_b7976aabbbb65e::t_8412bee6cd1737 3,7-11
+scripts/real-investigation.mjs
+  s_b7976aabbbb65e::t_65c6f1ae8d3320 7-17,19,21,47,53
+README.md
+  s_b7976aabbbb65e::t_e5f100bf143007 183,327
+  s_b7976aabbbb65e::t_8412bee6cd1737 270,330
+frontend/app.js
+  s_b7976aabbbb65e::t_b2f0df2a05c8a6 35,37,50,71,112
+frontend/index.html
+  s_b7976aabbbb65e::t_df3ba80faade7a 9
+frontend/style.css
+  s_b7976aabbbb65e::t_9596215bc767e0 52,180
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "3b26e506b2dec5544147ad6014a24336223cf2e9",
+  "prompts": {},
+  "sessions": {
+    "s_b7976aabbbb65e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ccdd-1c0b-72d3-b678-27816aa8f0dd",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
