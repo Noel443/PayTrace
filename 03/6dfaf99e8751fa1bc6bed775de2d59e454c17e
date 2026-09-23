@@ -1,0 +1,24 @@
+frontend/app.js
+  s_7e788323ae93a0::t_db4e7c76fa9d9e 68,71-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "036dfaf99e8751fa1bc6bed775de2d59e454c17e",
+  "prompts": {},
+  "humans": {
+    "h_a10a4d78dc54be": {
+      "author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_7e788323ae93a0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0cd38-fbe5-7f90-8d1a-fa1b38922efe",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "liuyuhao <noelliu4913@gmail.com>"
+    }
+  }
+}
